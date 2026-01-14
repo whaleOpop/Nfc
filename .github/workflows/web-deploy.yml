@@ -1,0 +1,137 @@
+name: Web-Deploy
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-deploy.yml'
+
+jobs:
+  deploy-web:
+    name: 🌐 Build & Deploy React Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Create .env file
+        working-directory: web
+        run: |
+          echo "VITE_API_URL=${{ secrets.VITE_API_URL }}" > .env
+          echo "VITE_APP_NAME=${{ secrets.VITE_APP_NAME }}" >> .env
+          echo "VITE_ENVIRONMENT=production" >> .env
+
+      - name: Build React app
+        working-directory: web
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: web/dist/
+          retention-days: 7
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          WEB_PATH: ${{ secrets.WEB_PATH }}
+        run: |
+          echo "📦 Creating deployment archive..."
+          cd web/dist
+          tar -czf ../../web-dist.tar.gz .
+          cd ../..
+
+          echo "📤 Uploading to server..."
+          scp web-dist.tar.gz $SERVER_USER@$SERVER_HOST:/tmp/
+
+          echo "🚀 Deploying on server..."
+          ssh $SERVER_USER@$SERVER_HOST << 'EOF'
+            set -e
+
+            # Backup current deployment
+            if [ -d "${{ secrets.WEB_PATH }}" ]; then
+              echo "💾 Creating backup..."
+              sudo cp -r ${{ secrets.WEB_PATH }} ${{ secrets.WEB_PATH }}.backup.$(date +%Y%m%d_%H%M%S)
+            fi
+
+            # Extract new build
+            echo "📂 Extracting new build..."
+            sudo mkdir -p ${{ secrets.WEB_PATH }}
+            sudo tar -xzf /tmp/web-dist.tar.gz -C ${{ secrets.WEB_PATH }}
+
+            # Set permissions
+            echo "🔐 Setting permissions..."
+            sudo chown -R www-data:www-data ${{ secrets.WEB_PATH }}
+            sudo chmod -R 755 ${{ secrets.WEB_PATH }}
+
+            # Reload nginx
+            echo "🔄 Reloading nginx..."
+            sudo nginx -t && sudo systemctl reload nginx
+
+            # Cleanup
+            echo "🧹 Cleaning up..."
+            rm /tmp/web-dist.tar.gz
+
+            # Remove old backups (keep last 5)
+            echo "🗑️ Removing old backups..."
+            cd $(dirname ${{ secrets.WEB_PATH }})
+            ls -t | grep '\.backup\.' | tail -n +6 | xargs -r sudo rm -rf
+
+            echo "✅ Frontend deployment completed!"
+          EOF
+
+      - name: Health check
+        run: |
+          echo "🏥 Checking frontend health..."
+          max_attempts=5
+          attempt=0
+
+          while [ $attempt -lt $max_attempts ]; do
+            if curl -f ${{ secrets.WEB_URL }} > /dev/null 2>&1; then
+              echo "✅ Frontend is accessible!"
+              exit 0
+            fi
+
+            attempt=$((attempt + 1))
+            echo "⏳ Attempt $attempt/$max_attempts - waiting for frontend..."
+            sleep 5
+          done
+
+          echo "⚠️ Frontend health check inconclusive (might still be working)"
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ Frontend deployment successful!"
+            echo "🌐 Available at: ${{ secrets.WEB_URL }}"
+          else
+            echo "❌ Frontend deployment failed!"
+          fi

@@ -1,0 +1,87 @@
+name: Backend-Deploy
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
+      - '.github/workflows/backend-deploy.yml'
+
+jobs:
+  deploy-backend:
+    name: 🚀 Deploy Django Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_PATH: ${{ secrets.SERVER_PATH }}
+        run: |
+          ssh $SERVER_USER@$SERVER_HOST << 'EOF'
+            set -e
+            cd ${{ secrets.SERVER_PATH }}
+
+            echo "📥 Pulling latest changes..."
+            git pull origin main
+
+            echo "🐳 Building and restarting Docker containers..."
+            docker-compose down
+            docker-compose up -d --build backend
+
+            echo "⏳ Waiting for backend to start..."
+            sleep 10
+
+            echo "🔄 Running migrations..."
+            docker-compose exec -T backend python manage.py migrate --noinput
+
+            echo "📦 Collecting static files..."
+            docker-compose exec -T backend python manage.py collectstatic --noinput
+
+            echo "✅ Backend deployment completed!"
+          EOF
+
+      - name: Health check
+        run: |
+          echo "🏥 Checking backend health..."
+          max_attempts=10
+          attempt=0
+
+          while [ $attempt -lt $max_attempts ]; do
+            if curl -f ${{ secrets.BACKEND_URL }}/api/health/ > /dev/null 2>&1; then
+              echo "✅ Backend is healthy!"
+              exit 0
+            fi
+
+            attempt=$((attempt + 1))
+            echo "⏳ Attempt $attempt/$max_attempts - waiting for backend..."
+            sleep 5
+          done
+
+          echo "❌ Backend health check failed!"
+          exit 1
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ Backend deployment successful!"
+          else
+            echo "❌ Backend deployment failed!"
+          fi
