@@ -1,297 +1,381 @@
 # GitHub Actions Workflows
 
-Автоматизированные CI/CD pipelines для NFC Medical Platform.
+This directory contains CI/CD workflows for automated deployment using GitHub Container Registry (GHCR).
 
-## 📱 Mobile Builds
+## Available Workflows
 
-### Android Build
-**Файл**: `android-build.yml`
-**Триггер**: Push в `main` branch
-**Артефакты**:
-- APK: `app-release.apk` (для установки на устройство)
-- AAB: `app-release.aab` (для Google Play Store)
+### Production Workflows (GHCR-based)
 
-**Процесс**:
-1. ⬆️ Автоматически увеличивает build number в `pubspec.yaml`
-2. 🏗️ Собирает APK и AAB файлы
-3. 📦 Загружает в GitHub Artifacts (хранится 90 дней)
-4. 🚀 Создает GitHub Release с тегом `android-vX.X.X+BUILD`
+1. **[backend-ghcr-deploy.yml](./backend-ghcr-deploy.yml)** - Backend deployment with GHCR
+   - Builds Django backend Docker image
+   - Pushes to GitHub Container Registry
+   - Deploys to production server
+   - Includes: backend, celery, celery-beat services
+   - Triggers on: changes to `backend/**`, `docker-compose.yml`
 
-### iOS Build
-**Файл**: `ios-build.yml`
-**Триггер**: Push в `main` branch
-**Артефакты**:
-- IPA: `FlutterIpaExport.ipa` (без code signing)
+2. **[web-ghcr-deploy.yml](./web-ghcr-deploy.yml)** - Frontend deployment with GHCR
+   - Builds React/Vite frontend Docker image
+   - Pushes to GitHub Container Registry
+   - Deploys to production server
+   - Triggers on: changes to `web/**`
 
-**Процесс**:
-1. ⬆️ Автоматически увеличивает build number в `pubspec.yaml`
-2. 🏗️ Собирает IPA файл
-3. 📦 Загружает в GitHub Artifacts
-4. 🚀 Создает GitHub Release с тегом `ios-vX.X.X+BUILD`
+### Legacy Workflows (SSH-based)
 
-⚠️ **Примечание**: IPA собирается без code signing. Для распространения через App Store требуется дополнительная настройка с Apple Developer сертификатами.
+3. **[backend-deploy.yml](./backend-deploy.yml)** - Original backend deployment
+   - Uses SSH and git pull
+   - Builds on server
+   - Legacy approach - consider migrating to GHCR version
 
----
+4. **[web-deploy.yml](./web-deploy.yml)** - Original frontend deployment
+   - Uses SSH and direct file copy
+   - Builds locally then uploads
+   - Legacy approach - consider migrating to GHCR version
 
-## 🖥️ Backend Deployment
+### Other Workflows
 
-**Файл**: `backend-deploy.yml`
-**Триггер**: Push в `main` (только при изменениях в `backend/**`)
-**Процесс**:
+5. **[ios-build.yml](./ios-build.yml)** - iOS mobile app build
+6. **[android-build.yml](./android-build.yml)** - Android mobile app build
+7. **[pages-deploy.yml](./pages-deploy.yml)** - GitHub Pages deployment
+8. **[full-deploy.yml](./full-deploy.yml)** - Full stack deployment
 
-1. 🔐 Подключение к серверу через SSH
-2. 📥 Git pull последних изменений
-3. 🐳 Пересборка и перезапуск Docker контейнеров
-4. 🔄 Применение миграций БД
-5. 📦 Сбор статических файлов
-6. 🏥 Health check API endpoint
+## Differences: GHCR vs SSH Deployment
 
-**Требования на сервере**:
-- Docker и Docker Compose
-- SSH доступ
-- Git repository клонирован в `$SERVER_PATH`
-- `.env` файл с настройками
+### SSH-based Deployment (Legacy)
+```
+Developer → Push to GitHub → Workflow starts
+   ↓
+Server pulls code via SSH
+   ↓
+Server builds Docker image locally
+   ↓
+Server runs docker-compose up
+```
 
----
+**Pros:**
+- Simpler setup
+- No container registry needed
+- Direct server control
 
-## 🌐 Frontend Deployment
+**Cons:**
+- Server needs git access
+- Builds consume server resources
+- No image versioning
+- Slower deployments
+- Hard to rollback
 
-### GitHub Pages (Рекомендуется)
-**Файл**: `pages-deploy.yml`
-**Триггер**: Push в `main` (только при изменениях в `web/**`)
-**URL**: `https://<username>.github.io/<repo-name>/`
+### GHCR-based Deployment (Recommended)
+```
+Developer → Push to GitHub → Workflow starts
+   ↓
+GitHub Actions builds Docker image
+   ↓
+Pushes image to GHCR
+   ↓
+Server pulls pre-built image
+   ↓
+Server runs docker-compose up
+```
 
-**Процесс**:
-1. 📦 Установка npm зависимостей
-2. 🏗️ Сборка React приложения (Vite) с правильным base path
-3. 📤 Загрузка в GitHub Pages
-4. 🚀 Автоматическая публикация
-5. ✅ Вывод deployment URL
+**Pros:**
+- ✅ Faster deployments (pre-built images)
+- ✅ Version control for images
+- ✅ Easy rollback to previous versions
+- ✅ Server doesn't need git or build tools
+- ✅ Consistent builds (CI environment)
+- ✅ Can deploy same image to multiple servers
+- ✅ Better separation of concerns
+- ✅ Free for public repositories
 
-**Преимущества**:
-- ✅ Бесплатный хостинг от GitHub
-- ✅ HTTPS из коробки
-- ✅ CDN и высокая скорость
-- ✅ Не требует собственного сервера
-- ✅ Автоматические деплои при push
+**Cons:**
+- Slightly more complex setup
+- Requires GHCR configuration
+- Uses GitHub Actions minutes (free tier: 2000 min/month)
 
-**Настройка**:
-1. Перейдите в **Settings** → **Pages**
-2. Source: **GitHub Actions**
-3. Workflow автоматически деплоит после push в `main`
+## Migration Guide
 
-**URL репозитория**:
-- Если репозиторий `username.github.io`: `https://username.github.io/`
-- Иначе: `https://username.github.io/repo-name/`
+### From SSH to GHCR Deployment
 
-⚠️ **Важно**: В secrets добавьте `VITE_API_URL` с адресом вашего backend API
+1. **Disable old workflows** (optional)
+   - Rename `backend-deploy.yml` to `backend-deploy.yml.disabled`
+   - Rename `web-deploy.yml` to `web-deploy.yml.disabled`
 
----
+2. **Configure new workflows**
+   - Ensure GitHub Secrets are configured (see [CICD_SETUP.md](../../CICD_SETUP.md))
+   - Enable package write permissions in repository settings
 
-### Self-hosted Server
-**Файл**: `web-deploy.yml`
-**Триггер**: Push в `main` (только при изменениях в `web/**`)
-**Процесс**:
+3. **Update docker-compose.yml**
+   - Already updated to support GHCR images
+   - Uses environment variables for image selection
 
-1. 📦 Установка npm зависимостей
-2. 🏗️ Сборка React приложения (Vite)
-3. 📤 Загрузка build на сервер через SCP
-4. 💾 Создание backup предыдущей версии
-5. 🚀 Распаковка нового build
-6. 🔄 Reload Nginx
-7. 🏥 Health check frontend URL
+4. **Test new workflows**
+   - Push changes to `main` branch
+   - Monitor workflow execution in Actions tab
+   - Verify deployment on server
 
-**Требования на сервере**:
-- Nginx установлен и настроен
-- SSH доступ
-- Директория `$WEB_PATH` существует
+5. **Clean up** (after successful migration)
+   - Remove old workflow files
+   - Update documentation
 
----
+## Workflow Configuration
 
-## 🔐 Настройка Secrets
+### Environment Variables
 
-Все необходимые GitHub Secrets описаны в [SECRETS_SETUP.md](../SECRETS_SETUP.md)
+Both GHCR workflows use these environment variables:
 
-### Быстрая проверка
+```yaml
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: nfc-medical-app
+```
+
+### Triggers
+
+**Backend GHCR:**
+```yaml
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/backend-ghcr-deploy.yml'
+```
+
+**Web GHCR:**
+```yaml
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-ghcr-deploy.yml'
+```
+
+### Permissions
+
+```yaml
+permissions:
+  contents: read      # Read repository contents
+  packages: write     # Push to GHCR
+```
+
+### Concurrency
+
+```yaml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+```
+
+This ensures:
+- Only one deployment runs at a time per workflow
+- New deployments cancel in-progress ones
+- Prevents deployment conflicts
+
+## Image Tagging Strategy
+
+Each image is tagged with:
+- `latest` - Always points to the most recent build
+- `sha-<commit>` - Specific commit hash (e.g., `sha-abc123`)
+- `main` - Branch name
+
+Example:
+```
+ghcr.io/username/nfc-medical-app-backend:latest
+ghcr.io/username/nfc-medical-app-backend:sha-abc123
+ghcr.io/username/nfc-medical-app-backend:main
+```
+
+### Rollback Strategy
+
+To rollback to a previous version:
+
 ```bash
-# Backend secrets (для self-hosted)
-✓ SSH_PRIVATE_KEY
-✓ SERVER_HOST
-✓ SERVER_USER
-✓ SERVER_PATH
-✓ BACKEND_URL
+# On your server
+cd /root/nfc-medical-app
 
-# Frontend secrets (для self-hosted)
-✓ WEB_PATH
-✓ WEB_URL
+# Edit .env to use specific SHA
+IMAGE_TAG=sha-previous-commit-hash
 
-# Frontend secrets (для GitHub Pages)
-✓ VITE_API_URL (URL вашего backend API)
-✓ VITE_APP_NAME (опционально)
+# Pull and restart
+docker compose pull backend
+docker compose up -d backend --force-recreate
 ```
 
----
+## Monitoring Workflows
 
-## 🎯 Workflow Triggers
+### GitHub Actions UI
 
-| Workflow | Trigger | Условие |
-|----------|---------|---------|
-| Android Build | Push to main | Всегда |
-| iOS Build | Push to main | Всегда |
-| Backend Deploy | Push to main | Изменения в `backend/**` |
-| GitHub Pages Deploy | Push to main | Изменения в `web/**` |
-| Self-hosted Web Deploy | Push to main | Изменения в `web/**` |
-| Full Deploy | Manual | Через GitHub UI |
+1. Go to repository → Actions tab
+2. Select workflow from left sidebar
+3. View runs and logs
 
----
+### Email Notifications
 
-## 📊 Workflow Status
+GitHub sends emails on workflow failures by default.
 
-Проверить статус workflows:
+### Slack/Discord Integration (Optional)
 
-1. Откройте **Actions** tab в GitHub репозитории
-2. Выберите нужный workflow слева
-3. Посмотрите последние runs и их статус
+Add notification steps to workflows:
 
-### Цветовая индикация:
-- 🟢 **Зеленый**: Успешно выполнен
-- 🟡 **Желтый**: В процессе выполнения
-- 🔴 **Красный**: Ошибка выполнения
-- ⚪ **Серый**: Ожидание запуска
-
----
-
-## 🔧 Локальное тестирование
-
-### Android
-```bash
-cd mobile
-flutter build apk --release
-# APK: build/app/outputs/flutter-apk/app-release.apk
+```yaml
+- name: Notify Slack
+  if: failure()
+  uses: slackapi/slack-github-action@v1
+  with:
+    webhook-url: ${{ secrets.SLACK_WEBHOOK }}
 ```
 
-### iOS
-```bash
-cd mobile
-flutter build ios --no-codesign
-# Requires macOS
+## Debugging Workflows
+
+### View detailed logs
+
+1. Go to Actions tab
+2. Click on failed workflow run
+3. Click on failed job
+4. Expand failed step
+
+### SSH debugging
+
+Add this step to workflow for SSH access:
+
+```yaml
+- name: Setup tmate session
+  uses: mxschmitt/action-tmate@v3
+  if: failure()
 ```
 
-### Backend
-```bash
-cd backend
-docker-compose up --build
+### Common Issues
+
+**Build fails:**
+- Check Dockerfile syntax
+- Ensure all files are committed
+- Check build logs in Actions tab
+
+**Push to GHCR fails:**
+- Verify packages: write permission is enabled
+- Check if GITHUB_TOKEN is available
+- Ensure repository allows package creation
+
+**Deployment fails:**
+- Verify SSH credentials
+- Check server has Docker installed
+- Ensure server has internet access to pull from GHCR
+- Check disk space on server
+
+**Health check fails:**
+- Verify URL is correct in secrets
+- Check if service is actually running
+- Increase timeout in health check step
+
+## Best Practices
+
+1. **Use path filters** to trigger only relevant workflows
+2. **Enable concurrency control** to prevent conflicts
+3. **Add health checks** to verify successful deployment
+4. **Use caching** to speed up builds
+5. **Set retention policies** for old images
+6. **Monitor workflow run times** and optimize as needed
+7. **Keep secrets secure** - never commit them
+8. **Test workflows** in a staging environment first
+9. **Document any custom changes** to workflows
+10. **Review workflow logs** regularly
+
+## Security Considerations
+
+1. **Secrets Management**
+   - Never commit secrets to repository
+   - Use GitHub Secrets for sensitive data
+   - Rotate secrets regularly
+
+2. **Image Security**
+   - Scan images for vulnerabilities
+   - Use minimal base images
+   - Keep dependencies updated
+
+3. **Access Control**
+   - Limit who can modify workflows
+   - Use branch protection rules
+   - Require PR reviews for workflow changes
+
+4. **GHCR Access**
+   - Images are private by default for private repos
+   - Configure package visibility in package settings
+   - Use package access tokens for external access
+
+## Performance Optimization
+
+### Build Caching
+
+Workflows use GitHub Actions cache:
+
+```yaml
+cache-from: type=gha
+cache-to: type=gha,mode=max
 ```
 
-### Frontend
-```bash
-cd web
-npm install
-npm run build
-# Output: dist/
+This can reduce build times by 50-80%.
+
+### Parallel Jobs
+
+Consider splitting workflows:
+
+```yaml
+jobs:
+  build:
+    # Build job
+  test:
+    needs: build
+    # Test job
+  deploy:
+    needs: [build, test]
+    # Deploy job
 ```
 
----
+### Conditional Execution
 
-## 🐛 Troubleshooting
+Skip unnecessary steps:
 
-### Android build fails
-- **Проблема**: Java version mismatch
-- **Решение**: Workflow использует Java 17 (Zulu)
-
-### iOS build fails
-- **Проблема**: CocoaPods dependencies
-- **Решение**: Workflow автоматически обновляет CocoaPods
-
-### Backend deployment fails
-- **Проблема**: SSH connection timeout
-- **Решение**: Проверьте `SSH_PRIVATE_KEY` и `SERVER_HOST`
-
-### Frontend deployment fails
-- **Проблема**: Permission denied
-- **Решение**: Убедитесь что `$WEB_PATH` принадлежит `www-data`
-
----
-
-## 📈 Версионирование
-
-### Автоматическое увеличение build number:
-
-Mobile builds (Android/iOS):
-- Версия: `X.Y.Z` (manual в pubspec.yaml)
-- Build: `N` (автоматически увеличивается при каждом build)
-- Формат: `X.Y.Z+N`
-- Commit: `⬆️ Bump build number to N`
-
-Backend/Frontend:
-- Версионирование через Git tags
-- Используйте semantic versioning: `v1.0.0`, `v1.1.0`, etc.
-
----
-
-## 🚀 Deployment Flow
-
-```
-┌─────────────────┐
-│   Git Push      │
-│   to main       │
-└────────┬────────┘
-         │
-    ┌────▼────┐
-    │ Changed?│
-    └────┬────┘
-         │
-    ┌────▼─────────────────────────────┐
-    │                                  │
-┌───▼────┐  ┌──────▼───┐  ┌──────▼──┐
-│ Mobile │  │ Backend  │  │Frontend │
-│ Builds │  │  Deploy  │  │ Deploy  │
-└───┬────┘  └──────┬───┘  └─────┬───┘
-    │              │             │
-    ▼              ▼             ▼
-┌────────┐   ┌──────────┐  ┌────────┐
-│Release │   │  Server  │  │ Server │
-│on GH   │   │  Docker  │  │ Nginx  │
-└────────┘   └──────────┘  └────────┘
+```yaml
+- name: Run tests
+  if: github.event_name == 'pull_request'
 ```
 
----
+## Cost Management
 
-## 📝 Best Practices
+### GitHub Actions Minutes
 
-1. **Commit Messages**: Используйте conventional commits
-   - `feat:` для новых функций
-   - `fix:` для исправлений
-   - `docs:` для документации
-   - `ci:` для CI/CD изменений
+- Free tier: 2000 minutes/month
+- These workflows use approximately:
+  - Backend build: 3-5 minutes
+  - Frontend build: 2-4 minutes
+  - Deploy: 1-2 minutes each
 
-2. **Branch Strategy**:
-   - `main` - production-ready код
-   - `develop` - разработка
-   - `feature/*` - новые фичи
+### GHCR Storage
 
-3. **Secrets**: Регулярно ротируйте SSH ключи
+- Free for public repositories
+- Private repositories: Free up to storage limits
+- Clean up old images periodically
 
-4. **Monitoring**: Настройте уведомления о failed workflows
+### Optimization Tips
 
-5. **Backups**: Backend deployment автоматически создает backups
+1. Use `actions/cache` for dependencies
+2. Use smaller base images (alpine variants)
+3. Combine RUN commands in Dockerfile
+4. Use multi-stage builds
+5. Set appropriate workflow triggers (path filters)
 
----
+## Further Reading
 
-## 🆘 Support
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [GHCR Documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
+- [Docker Best Practices](https://docs.docker.com/develop/dev-best-practices/)
+- [Workflow Syntax](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions)
 
-При проблемах с CI/CD:
+## Support
 
-1. Проверьте логи в **Actions** tab
-2. Убедитесь что все Secrets настроены
-3. Проверьте доступность сервера
-4. Проверьте права доступа на сервере
-
----
-
-## 📚 Документация
-
-- [GitHub Actions Docs](https://docs.github.com/en/actions)
-- [Flutter Build Docs](https://docs.flutter.dev/deployment)
-- [Docker Compose Docs](https://docs.docker.com/compose/)
-- [Nginx Docs](https://nginx.org/en/docs/)
+For issues or questions:
+1. Check [CICD_SETUP.md](../../CICD_SETUP.md)
+2. Review workflow logs in Actions tab
+3. Check GitHub Actions documentation
+4. Open an issue in the repository

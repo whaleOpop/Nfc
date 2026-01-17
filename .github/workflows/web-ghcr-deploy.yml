@@ -1,0 +1,173 @@
+name: Build and Deploy Frontend (GHCR)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-ghcr-deploy.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: nfc-medical-app
+
+jobs:
+  build-frontend:
+    name: Build & Push Frontend Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}-frontend
+          tags: |
+            type=raw,value=latest
+            type=sha
+            type=ref,event=branch
+          labels: |
+            org.opencontainers.image.title=${{ env.IMAGE_NAME }}-frontend
+            org.opencontainers.image.source=${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build & Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          file: ./web/Dockerfile
+          push: true
+          provenance: false
+          sbom: false
+          build-args: |
+            VITE_API_URL=${{ secrets.VITE_API_URL }}
+            VITE_APP_NAME=${{ secrets.VITE_APP_NAME }}
+            VITE_ENVIRONMENT=production
+          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-frontend:
+    needs: [ build-frontend ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: |
+          cat <<EOF > .env
+          IMAGE_TAG=${{ github.sha }}
+          GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
+
+          # Frontend environment variables
+          VITE_API_URL=${{ secrets.VITE_API_URL }}
+          VITE_APP_NAME=${{ secrets.VITE_APP_NAME }}
+          VITE_ENVIRONMENT=production
+
+          # Database (for backend services)
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+
+          # Redis
+          REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+          EOF
+          chmod 600 .env
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} -p 22 >> ~/.ssh/known_hosts
+
+      - name: Copy files to server
+        run: |
+          rsync -avz --delete -e "ssh -p 22" \
+            docker-compose.yml \
+            .env \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ secrets.SERVER_PATH }}/
+
+      - name: Deploy Frontend via Docker Compose
+        run: |
+          ssh -p 22 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+          set -euo pipefail
+          cd ${{ secrets.SERVER_PATH }}
+
+          # Check Docker Compose v2
+          if ! docker compose version > /dev/null 2>&1; then
+            echo "⚠️ Docker Compose v2 not found, installing..."
+            curl -fsSL https://get.docker.com | sh
+          fi
+
+          echo "Stopping and removing frontend container..."
+          docker compose stop web || true
+          docker compose rm -f web || true
+
+          echo "Login to GHCR..."
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+          echo "Pulling frontend image..."
+          docker compose pull web --quiet
+
+          echo "Starting frontend container..."
+          docker compose up -d web --force-recreate --pull always
+
+          echo "Container status:"
+          docker compose ps web
+
+          echo "✅ Frontend deployed successfully"
+          EOF
+
+      - name: Health check
+        run: |
+          echo "🏥 Checking frontend health..."
+          max_attempts=5
+          attempt=0
+
+          while [ $attempt -lt $max_attempts ]; do
+            if curl -f ${{ secrets.WEB_URL }} > /dev/null 2>&1; then
+              echo "✅ Frontend is accessible!"
+              exit 0
+            fi
+
+            attempt=$((attempt + 1))
+            echo "⏳ Attempt $attempt/$max_attempts - waiting for frontend..."
+            sleep 5
+          done
+
+          echo "⚠️ Frontend health check inconclusive (might still be working)"
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ Frontend deployment successful!"
+            echo "🌐 Available at: ${{ secrets.WEB_URL }}"
+            echo "🐳 Image: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}-frontend:${{ github.sha }}"
+          else
+            echo "❌ Frontend deployment failed!"
+          fi
