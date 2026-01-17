@@ -19,15 +19,13 @@ Both workflows use GitHub Container Registry (GHCR) to store Docker images and d
 
 ## Important Notes
 
-### Docker Image Names and Lowercase
+### Docker Image Naming
 
-Docker/GHCR requires all repository and image names to be lowercase. If your GitHub username contains uppercase letters (e.g., `whaleOpop`), the workflows automatically convert it to lowercase (e.g., `whaleopop`) when building and pushing images.
+All Docker images are published to GitHub Container Registry (GHCR) with the following naming convention:
+- Backend: `ghcr.io/<username>/nfc-backend-nfc:<tag>`
+- Frontend: `ghcr.io/<username>/nfc-frontend-nfc:<tag>`
 
-**Example:**
-- GitHub username: `whaleOpop`
-- GHCR image: `ghcr.io/whaleopop/nfc-backend-nfc:latest` (lowercase!)
-
-This conversion is handled automatically in the workflows, so you don't need to do anything special. Just be aware that the actual image names will be lowercase regardless of your GitHub username casing.
+Where `<username>` is your GitHub username and `<tag>` can be `latest`, `sha-<commit>`, or branch name.
 
 ## Setup Instructions
 
@@ -202,8 +200,13 @@ docker compose up -d --build
 **For Production (with GHCR):**
 ```bash
 # Set these in your .env file on the server
-GITHUB_REPOSITORY_OWNER=your-github-username
-IMAGE_TAG=latest  # or specific sha
+GITHUB_REPOSITORY_OWNER=whaleopop  # Your GitHub username
+IMAGE_TAG=latest  # or sha-<commit> or branch name
+
+# Examples of valid IMAGE_TAG values:
+# IMAGE_TAG=latest                                       # Latest build
+# IMAGE_TAG=sha-abc123def456...                          # Specific commit
+# IMAGE_TAG=main                                         # Main branch
 
 # Pull and run from GHCR
 docker compose pull
@@ -259,20 +262,6 @@ docker compose up -d
 - Check if repository settings allow package creation
 - For manual pulls, create Personal Access Token with `read:packages` scope
 
-### Invalid Reference Format (Uppercase Username)
-
-**Issue**: Error message: `invalid reference format: repository name (Username/image) must be lowercase`
-
-**Cause**: Your GitHub username contains uppercase letters (e.g., `whaleOpop`)
-
-**Solution**: This is now handled automatically in the workflows! The workflows convert your username to lowercase when building images. If you're seeing this error:
-1. Ensure you're using the latest version of the workflow files
-2. Re-run the failed workflow
-3. For local usage, manually specify lowercase in `.env`:
-   ```bash
-   GITHUB_REPOSITORY_OWNER=whaleopop  # lowercase version
-   ```
-
 ## Image Management
 
 ### View Published Images
@@ -287,12 +276,12 @@ docker compose up -d
 # Login to GHCR
 echo "YOUR_GITHUB_TOKEN" | docker login ghcr.io -u YOUR_USERNAME --password-stdin
 
-# Pull specific image (note: username must be lowercase!)
-docker pull ghcr.io/yourusername/nfc-backend-nfc:latest
-docker pull ghcr.io/yourusername/nfc-frontend-nfc:latest
+# Pull specific image
+docker pull ghcr.io/whaleopop/nfc-backend-nfc:latest
+docker pull ghcr.io/whaleopop/nfc-frontend-nfc:latest
 
 # Pull specific commit
-docker pull ghcr.io/yourusername/nfc-backend-nfc:sha-abc123
+docker pull ghcr.io/whaleopop/nfc-backend-nfc:sha-abc123def456...
 ```
 
 ### Clean Up Old Images

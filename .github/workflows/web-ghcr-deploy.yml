@@ -27,10 +27,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set lowercase repository owner
-        id: lowercase
-        run: echo "owner=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -45,7 +41,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ steps.lowercase.outputs.owner }}/${{ env.IMAGE_NAME }}-frontend-nfc
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}-frontend-nfc
           tags: |
             type=raw,value=latest
             type=sha
@@ -81,12 +77,9 @@ jobs:
 
       - name: Create .env file
         run: |
-          # Convert repository owner to lowercase for Docker image names
-          OWNER_LOWERCASE=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-
           cat <<EOF > .env
           IMAGE_TAG=sha-${{ github.sha }}
-          GITHUB_REPOSITORY_OWNER=${OWNER_LOWERCASE}
+          GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
 
           # Frontend environment variables
           VITE_API_URL=${{ secrets.VITE_API_URL }}
@@ -190,11 +183,10 @@ jobs:
       - name: Notify deployment status
         if: always()
         run: |
-          OWNER_LOWERCASE=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           if [ ${{ job.status }} == 'success' ]; then
             echo "✅ Frontend deployment successful!"
             echo "🌐 Available at: ${{ secrets.WEB_URL }}"
-            echo "🐳 Image: ghcr.io/${OWNER_LOWERCASE}/${{ env.IMAGE_NAME }}-frontend-nfc:${{ github.sha }}"
+            echo "🐳 Image: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}-frontend-nfc:sha-${{ github.sha }}"
           else
             echo "❌ Frontend deployment failed!"
           fi
