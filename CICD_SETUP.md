@@ -141,6 +141,18 @@ You can also trigger workflows manually:
 3. Click "Run workflow"
 4. Select branch and click "Run workflow"
 
+## Ports Configuration
+
+The application uses the following ports:
+
+- **80, 443** - Nginx reverse proxy (HTTPS/HTTP)
+- **3000** - Web frontend (React/Vite app)
+- **8000** - Django backend API
+- **5432** - PostgreSQL database
+- **6379** - Redis cache
+
+Make sure these ports are available on your server or adjust them in `docker-compose.yml`.
+
 ## Workflow Process
 
 ### Backend Workflow
@@ -150,10 +162,10 @@ You can also trigger workflows manually:
    - Sets up Docker Buildx
    - Logs into GHCR
    - Builds Docker image for backend
-   - Pushes image to GHCR with tags: `latest`, `sha-<commit>`, `branch-<name>`
+   - Pushes image to GHCR with tags: `latest`, `sha-<short-commit>`, `branch-<name>`
 
 2. **Deploy Job**:
-   - Creates `.env` file with secrets
+   - Creates `.env` file with all environment variables
    - Copies `docker-compose.yml` and `.env` to server via SSH
    - Logs into GHCR on server
    - Pulls latest backend image

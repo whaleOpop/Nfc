@@ -35,7 +35,8 @@ docker compose ps
 
 5. **Access the application**
 - Backend API: http://localhost:8000
-- Frontend: http://localhost:80
+- Frontend: http://localhost:3000
+- Nginx (reverse proxy): http://localhost:80
 - Admin Panel: http://localhost:8000/admin
 
 6. **View logs**
