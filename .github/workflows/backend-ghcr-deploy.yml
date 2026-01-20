@@ -82,24 +82,27 @@ jobs:
           GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
 
           # Backend secrets
-          SECRET_KEY=${{ secrets.SECRET_KEY }}
-          DEBUG=${{ secrets.DEBUG }}
-          ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
+          SECRET_KEY=${{ secrets.SECRET_KEY || 'insecure-default-key-change-in-production' }}
+          DEBUG=${{ secrets.DEBUG || 'False' }}
+          ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS || '*' }}
 
           # Database (PostgreSQL)
-          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
-          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
-          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          POSTGRES_DB=${{ secrets.POSTGRES_DB || 'nfc_medical' }}
+          POSTGRES_USER=${{ secrets.POSTGRES_USER || 'nfc_user' }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD || secrets.DB_PASSWORD || 'changeme' }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD || secrets.POSTGRES_PASSWORD || 'changeme' }}
 
           # Redis
-          REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+          REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD || 'changeme' }}
 
           # Celery
-          CELERY_BROKER_URL=${{ secrets.CELERY_BROKER_URL }}
-          CELERY_RESULT_BACKEND=${{ secrets.CELERY_RESULT_BACKEND }}
+          CELERY_BROKER_URL=${{ secrets.CELERY_BROKER_URL || 'redis://:changeme@redis:6379/0' }}
+          CELERY_RESULT_BACKEND=${{ secrets.CELERY_RESULT_BACKEND || 'redis://:changeme@redis:6379/0' }}
           EOF
           chmod 600 .env
+
+          echo "📝 Created .env file with following variables:"
+          cat .env | grep -v PASSWORD | grep -v SECRET_KEY | grep -v REDIS_PASSWORD
 
       - name: Setup SSH key
         run: |
@@ -142,6 +145,38 @@ jobs:
 
           echo "🚀 Deploying backend to: $DEPLOY_PATH"
           cd "$DEPLOY_PATH"
+
+          # Check .env file exists
+          if [ ! -f .env ]; then
+            echo "❌ .env file not found!"
+            exit 1
+          fi
+          echo "✅ .env file found"
+
+          # Verify critical environment variables are set
+          echo "🔍 Checking environment variables..."
+          missing_vars=0
+
+          if ! grep -q "^SECRET_KEY=" .env || grep -q "^SECRET_KEY=$" .env; then
+            echo "⚠️ SECRET_KEY is not set or empty"
+            missing_vars=$((missing_vars + 1))
+          fi
+
+          if ! grep -q "^POSTGRES_PASSWORD=" .env || grep -q "^POSTGRES_PASSWORD=$" .env; then
+            echo "⚠️ POSTGRES_PASSWORD is not set or empty"
+            missing_vars=$((missing_vars + 1))
+          fi
+
+          if ! grep -q "^CELERY_BROKER_URL=" .env || grep -q "^CELERY_BROKER_URL=$" .env; then
+            echo "⚠️ CELERY_BROKER_URL is not set or empty"
+            missing_vars=$((missing_vars + 1))
+          fi
+
+          if [ $missing_vars -gt 0 ]; then
+            echo "❌ Found $missing_vars missing critical variables. Using defaults."
+          else
+            echo "✅ All critical environment variables are set"
+          fi
 
           # Check if Docker daemon is running
           if ! docker info > /dev/null 2>&1; then
@@ -193,7 +228,11 @@ jobs:
           echo "✅ Database is ready"
 
           echo "🚀 Starting Backend services..."
-          docker compose up -d backend celery celery-beat --force-recreate
+          if ! docker compose up -d backend celery celery-beat --force-recreate; then
+            echo "❌ Failed to start backend services"
+            docker compose logs backend celery celery-beat --tail 50
+            exit 1
+          fi
 
           echo "⏳ Waiting for backend container to be healthy..."
           max_wait=60
@@ -201,14 +240,43 @@ jobs:
           until [ "$(docker inspect -f '{{.State.Status}}' nfc_backend 2>/dev/null)" == "running" ]; do
             counter=$((counter + 1))
             if [ $counter -gt $max_wait ]; then
-              echo "❌ Backend container failed to start"
-              docker compose logs backend
+              echo "❌ Backend container failed to start after $max_wait seconds"
+              echo ""
+              echo "📋 Container status:"
+              docker compose ps
+              echo ""
+              echo "📝 Backend logs:"
+              docker compose logs backend --tail 100
+              echo ""
+              echo "🔍 Docker inspect:"
+              docker inspect nfc_backend 2>/dev/null || echo "Container nfc_backend does not exist"
               exit 1
             fi
             echo "Waiting for backend container... ($counter/$max_wait)"
             sleep 2
           done
           echo "✅ Backend container is running"
+
+          # Verify all backend services are running
+          echo "🔍 Verifying all backend services..."
+          services_ok=true
+
+          for service in backend celery celery-beat; do
+            status=$(docker compose ps $service --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "missing")
+            if [ "$status" != "running" ]; then
+              echo "⚠️ Service $service is not running (status: $status)"
+              services_ok=false
+            else
+              echo "✅ Service $service is running"
+            fi
+          done
+
+          if [ "$services_ok" != "true" ]; then
+            echo "❌ Not all backend services are running"
+            docker compose ps
+            docker compose logs backend celery celery-beat --tail 50
+            exit 1
+          fi
 
           # Additional wait for app initialization
           echo "⏳ Waiting for Django to initialize..."
