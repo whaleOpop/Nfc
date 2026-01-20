@@ -153,30 +153,41 @@ jobs:
           fi
           echo "✅ .env file found"
 
+          # Show .env file (without sensitive data)
+          echo "📝 Environment variables in .env:"
+          cat .env | grep -v "PASSWORD" | grep -v "SECRET_KEY" | grep -v "REDIS_PASSWORD"
+          echo ""
+
           # Verify critical environment variables are set
-          echo "🔍 Checking environment variables..."
+          echo "🔍 Checking critical environment variables..."
           missing_vars=0
 
           if ! grep -q "^SECRET_KEY=" .env || grep -q "^SECRET_KEY=$" .env; then
             echo "⚠️ SECRET_KEY is not set or empty"
             missing_vars=$((missing_vars + 1))
+          else
+            echo "✅ SECRET_KEY is set"
           fi
 
           if ! grep -q "^POSTGRES_PASSWORD=" .env || grep -q "^POSTGRES_PASSWORD=$" .env; then
             echo "⚠️ POSTGRES_PASSWORD is not set or empty"
             missing_vars=$((missing_vars + 1))
+          else
+            echo "✅ POSTGRES_PASSWORD is set"
           fi
 
           if ! grep -q "^CELERY_BROKER_URL=" .env || grep -q "^CELERY_BROKER_URL=$" .env; then
             echo "⚠️ CELERY_BROKER_URL is not set or empty"
             missing_vars=$((missing_vars + 1))
+          else
+            echo "✅ CELERY_BROKER_URL is set"
           fi
 
           if [ $missing_vars -gt 0 ]; then
-            echo "❌ Found $missing_vars missing critical variables. Using defaults."
-          else
-            echo "✅ All critical environment variables are set"
+            echo "❌ Found $missing_vars missing critical variables"
+            exit 1
           fi
+          echo ""
 
           # Check if Docker daemon is running
           if ! docker info > /dev/null 2>&1; then
@@ -228,34 +239,55 @@ jobs:
           echo "✅ Database is ready"
 
           echo "🚀 Starting Backend services..."
-          if ! docker compose up -d backend celery celery-beat --force-recreate; then
-            echo "❌ Failed to start backend services"
-            docker compose logs backend celery celery-beat --tail 50
-            exit 1
-          fi
+          docker compose up -d backend celery celery-beat --force-recreate
 
-          echo "⏳ Waiting for backend container to be healthy..."
-          max_wait=60
+          echo "⏳ Waiting for backend container to start (up to 120 seconds)..."
+          max_wait=120
           counter=0
-          until [ "$(docker inspect -f '{{.State.Status}}' nfc_backend 2>/dev/null)" == "running" ]; do
+
+          while [ $counter -lt $max_wait ]; do
             counter=$((counter + 1))
-            if [ $counter -gt $max_wait ]; then
-              echo "❌ Backend container failed to start after $max_wait seconds"
-              echo ""
-              echo "📋 Container status:"
-              docker compose ps
-              echo ""
-              echo "📝 Backend logs:"
-              docker compose logs backend --tail 100
-              echo ""
-              echo "🔍 Docker inspect:"
-              docker inspect nfc_backend 2>/dev/null || echo "Container nfc_backend does not exist"
-              exit 1
+
+            # Check if container exists
+            if docker inspect nfc_backend >/dev/null 2>&1; then
+              status=$(docker inspect -f '{{.State.Status}}' nfc_backend 2>/dev/null || echo "unknown")
+
+              if [ "$status" = "running" ]; then
+                echo "✅ Backend container is running"
+                break
+              elif [ "$status" = "exited" ] || [ "$status" = "dead" ]; then
+                echo "❌ Backend container crashed (status: $status)"
+                echo ""
+                echo "📝 Backend logs:"
+                docker compose logs backend --tail 100
+                echo ""
+                echo "🔍 Exit code:"
+                docker inspect -f '{{.State.ExitCode}}' nfc_backend
+                exit 1
+              else
+                echo "⏳ Container status: $status ($counter/$max_wait)"
+              fi
+            else
+              echo "⏳ Container not created yet ($counter/$max_wait)"
             fi
-            echo "Waiting for backend container... ($counter/$max_wait)"
+
             sleep 2
           done
-          echo "✅ Backend container is running"
+
+          # Final check after timeout
+          if [ $counter -ge $max_wait ]; then
+            echo "❌ Backend container failed to start after $max_wait seconds"
+            echo ""
+            echo "📋 All containers:"
+            docker compose ps
+            echo ""
+            echo "📝 Backend logs (if any):"
+            docker compose logs backend --tail 100 || echo "No logs available"
+            echo ""
+            echo "📝 Celery logs (if any):"
+            docker compose logs celery --tail 50 || echo "No logs available"
+            exit 1
+          fi
 
           # Verify all backend services are running
           echo "🔍 Verifying all backend services..."
@@ -279,8 +311,8 @@ jobs:
           fi
 
           # Additional wait for app initialization
-          echo "⏳ Waiting for Django to initialize..."
-          sleep 10
+          echo "⏳ Waiting for Django to initialize (30 seconds)..."
+          sleep 30
 
           echo "🔍 Verifying manage.py is accessible..."
           if ! docker compose exec -T backend test -f /app/manage.py; then
@@ -319,7 +351,7 @@ jobs:
       - name: Health check
         run: |
           echo "🏥 Checking backend health..."
-          max_attempts=15
+          max_attempts=30
           attempt=0
 
           while [ $attempt -lt $max_attempts ]; do
@@ -327,14 +359,18 @@ jobs:
 
             echo "⏳ Attempt $attempt/$max_attempts - checking backend..."
 
-            if curl -f -s -o /dev/null -w "%{http_code}" ${{ secrets.BACKEND_URL }}/api/health/ 2>/dev/null | grep -q "200"; then
+            http_code=$(curl -f -s -o /dev/null -w "%{http_code}" ${{ secrets.BACKEND_URL }}/api/health/ 2>/dev/null || echo "000")
+
+            if [ "$http_code" = "200" ]; then
               echo "✅ Backend is healthy!"
               echo "📍 Backend URL: ${{ secrets.BACKEND_URL }}/api/health/"
               exit 0
+            else
+              echo "   Response code: $http_code"
             fi
 
             if [ $attempt -lt $max_attempts ]; then
-              sleep 6
+              sleep 10
             fi
           done
 
