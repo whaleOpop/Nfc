@@ -41,7 +41,9 @@ services:
              python manage.py collectstatic --noinput &&
              gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4"
     volumes:
-      - ./backend:/app
+      # Commented out for production - code is in Docker image
+      # Uncomment for local development to enable hot reload
+      # - ./backend:/app
       - static_volume:/app/staticfiles
       - media_volume:/app/media
     ports:
@@ -73,7 +75,10 @@ services:
     restart: always
     command: celery -A config worker -l info
     volumes:
-      - ./backend:/app
+      # Commented out for production - code is in Docker image
+      # Uncomment for local development
+      # - ./backend:/app
+      - media_volume:/app/media
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DEBUG=${DEBUG:-False}
@@ -101,7 +106,10 @@ services:
     restart: always
     command: celery -A config beat -l info
     volumes:
-      - ./backend:/app
+      # Commented out for production - code is in Docker image
+      # Uncomment for local development
+      # - ./backend:/app
+      - media_volume:/app/media
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DEBUG=${DEBUG:-False}
