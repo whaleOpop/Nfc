@@ -1,24 +1,54 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Box } from '@mui/material'
-
-// Pages (to be created)
-// import Login from './pages/Login'
-// import Dashboard from './pages/Dashboard'
-// import Profile from './pages/Profile'
-// import NFCManagement from './pages/NFCManagement'
-// import AdminPanel from './pages/AdminPanel'
+import ProtectedRoute from './components/ProtectedRoute'
+import Login from './pages/Login'
+import Register from './pages/Register'
+import Dashboard from './pages/Dashboard'
+import Profile from './pages/Profile'
+import NFCManagement from './pages/NFCManagement'
+import AdminPanel from './pages/AdminPanel'
+import EmergencyAccess from './pages/EmergencyAccess'
 
 function App() {
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/login" element={<div>Login Page</div>} />
-        <Route path="/register" element={<div>Register Page</div>} />
-        <Route path="/dashboard" element={<div>Dashboard</div>} />
-        <Route path="/profile" element={<div>Profile</div>} />
-        <Route path="/nfc" element={<div>NFC Management</div>} />
-        <Route path="/admin" element={<div>Admin Panel</div>} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/nfc"
+          element={
+            <ProtectedRoute>
+              <NFCManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminPanel />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/emergency/:tagId" element={<EmergencyAccess />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Box>

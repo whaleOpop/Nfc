@@ -8,6 +8,7 @@ import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
 import App from './App'
+import { AuthProvider } from './contexts/AuthContext'
 
 // Create a client
 const queryClient = new QueryClient({
@@ -65,7 +66,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <BrowserRouter>
         <ThemeProvider theme={theme}>
           <CssBaseline />
-          <App />
+          <AuthProvider>
+            <App />
+          </AuthProvider>
           <ToastContainer
             position="top-right"
             autoClose={3000}
