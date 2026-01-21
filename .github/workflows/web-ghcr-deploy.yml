@@ -5,6 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'web/**'
+      - 'docker-compose.yml'
       - '.github/workflows/web-ghcr-deploy.yml'
 
 permissions:
