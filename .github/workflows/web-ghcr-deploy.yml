@@ -204,42 +204,6 @@ jobs:
           echo "✅ Frontend deployed successfully"
           ENDSSH
 
-      - name: Health check
-        run: |
-          echo "🏥 Checking frontend health..."
-          max_attempts=10
-          attempt=0
-
-          while [ $attempt -lt $max_attempts ]; do
-            attempt=$((attempt + 1))
-
-            echo "⏳ Attempt $attempt/$max_attempts - checking frontend..."
-
-            if curl -f -s -o /dev/null -w "%{http_code}" ${{ secrets.WEB_URL }} 2>/dev/null | grep -q "200"; then
-              echo "✅ Frontend is accessible!"
-              echo "🌐 Frontend URL: ${{ secrets.WEB_URL }}"
-              exit 0
-            fi
-
-            if [ $attempt -lt $max_attempts ]; then
-              sleep 5
-            fi
-          done
-
-          echo "⚠️ Frontend health check failed after $max_attempts attempts"
-          echo "🔍 Checking frontend logs on server..."
-
-          # Get logs from server for debugging
-          ssh -p 22 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
-            cd ${{ secrets.SERVER_PATH }}
-            echo "📝 Frontend container logs:"
-            docker compose logs web --tail 50
-            echo "📋 Container status:"
-            docker compose ps web
-          ENDSSH
-
-          exit 1
-
       - name: Cleanup old images
         if: success()
         run: |

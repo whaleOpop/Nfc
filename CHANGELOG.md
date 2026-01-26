@@ -43,6 +43,7 @@ All notable changes to the NFC Medical Platform will be documented in this file.
 - Updated frontend API URL configuration to use `https://testapi.soldium.ru/api`
 - Improved frontend build process with proper environment variables
 - Updated GitHub Actions workflows to use correct VITE variables from secrets
+- Removed health checks from workflows to speed up deployment
 
 #### Fixed
 - Fixed frontend API URL double-domain issue

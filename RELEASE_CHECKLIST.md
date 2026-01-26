@@ -14,11 +14,12 @@
 # 1. Добавить все файлы
 git add .
 
-# 2. Коммит (включает исправление workflows для удаления старых контейнеров)
+# 2. Коммит (включает исправление workflows)
 git commit -m "🎉 Release v1.0.0 - Complete Frontend Implementation
 
 - Add complete web frontend with all pages
 - Fix workflows to properly remove old containers before deploy
+- Remove health checks from workflows for faster deployment
 - Add VERSION, CHANGELOG, and release documentation
 - Update API URL configuration
 "

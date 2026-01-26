@@ -363,37 +363,6 @@ jobs:
           echo "✅ Backend deployed successfully"
           ENDSSH
 
-      - name: Health check
-        if: always()
-        continue-on-error: true
-        run: |
-          echo "🏥 Checking backend health..."
-          max_attempts=10
-          attempt=0
-
-          while [ $attempt -lt $max_attempts ]; do
-            attempt=$((attempt + 1))
-
-            echo "⏳ Attempt $attempt/$max_attempts - checking backend..."
-
-            http_code=$(curl -s -o /dev/null -w "%{http_code}" ${{ secrets.BACKEND_URL }}/api/health/ 2>/dev/null || echo "000")
-
-            if [ "$http_code" = "200" ]; then
-              echo "✅ Backend is healthy!"
-              echo "📍 Backend URL: ${{ secrets.BACKEND_URL }}/api/health/"
-              exit 0
-            else
-              echo "   Response code: $http_code"
-            fi
-
-            if [ $attempt -lt $max_attempts ]; then
-              sleep 15
-            fi
-          done
-
-          echo "⚠️ Backend health check failed after $max_attempts attempts"
-          echo "Note: Backend may still be working, check manually: ${{ secrets.BACKEND_URL }}/api/health/"
-
       - name: Cleanup old images
         if: success()
         run: |
