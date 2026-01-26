@@ -223,9 +223,31 @@ jobs:
           echo "📥 Pulling latest backend image..."
           docker compose pull backend --quiet
 
-          echo "🐳 Ensuring database and redis are running..."
-          # Don't recreate - just start if stopped, use existing if running
-          docker compose up -d db redis --no-recreate
+          echo "🔍 Checking database and redis status..."
+          # Start existing containers if they're stopped, don't try to create new ones
+          if docker ps -a --format '{{.Names}}' | grep -q '^nfc_postgres$'; then
+            if ! docker ps --format '{{.Names}}' | grep -q '^nfc_postgres$'; then
+              echo "📦 Starting existing postgres container..."
+              docker start nfc_postgres
+            else
+              echo "✅ Postgres is already running"
+            fi
+          else
+            echo "📦 Creating postgres container..."
+            docker compose up -d db --no-recreate || docker compose up -d db
+          fi
+
+          if docker ps -a --format '{{.Names}}' | grep -q '^nfc_redis$'; then
+            if ! docker ps --format '{{.Names}}' | grep -q '^nfc_redis$'; then
+              echo "📦 Starting existing redis container..."
+              docker start nfc_redis
+            else
+              echo "✅ Redis is already running"
+            fi
+          else
+            echo "📦 Creating redis container..."
+            docker compose up -d redis --no-recreate || docker compose up -d redis
+          fi
 
           echo "⏳ Waiting for database to be ready..."
           max_wait=30

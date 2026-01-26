@@ -18,7 +18,8 @@ git add .
 git commit -m "🎉 Release v1.0.0 - Complete Frontend Implementation
 
 - Add complete web frontend with all pages
-- Fix workflows to properly remove old containers before deploy
+- Fix workflows to properly handle existing containers
+- Add smart container check for DB/Redis (prevents conflicts)
 - Remove health checks from workflows for faster deployment
 - Add VERSION, CHANGELOG, and release documentation
 - Update API URL configuration
