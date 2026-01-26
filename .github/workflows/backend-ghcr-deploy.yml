@@ -223,9 +223,16 @@ jobs:
           echo "📥 Pulling latest backend image..."
           docker compose pull backend --quiet
 
-          echo "🚀 Starting Backend services (without dependencies)..."
-          # --no-deps prevents Docker Compose from trying to create db/redis
-          docker compose up -d --no-deps --force-recreate backend celery celery-beat
+          echo "🔍 Checking if db and redis containers exist..."
+          if docker ps | grep -q nfc_postgres && docker ps | grep -q nfc_redis; then
+            echo "✅ DB and Redis are running, using existing containers"
+            # They exist and are running, so compose will just link to them
+            echo "🚀 Starting Backend services..."
+            docker compose up -d backend celery celery-beat --force-recreate
+          else
+            echo "⚠️ DB or Redis not running, starting all services..."
+            docker compose up -d
+          fi
 
           echo "⏳ Waiting for backend container to start (up to 120 seconds)..."
           max_wait=120
