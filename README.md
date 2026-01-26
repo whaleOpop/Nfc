@@ -1,5 +1,7 @@
 # NFC Medical Emergency Access Platform
 
+**Version 1.0.0** - Full Release with Complete Frontend
+
 Цифровая платформа экстренного доступа к медицинской информации через NFC-метки (NTAG215).
 
 ## Архитектура
