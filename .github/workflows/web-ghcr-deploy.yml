@@ -164,9 +164,12 @@ jobs:
           fi
           echo "✅ Docker Compose version: $(docker compose version)"
 
-          echo "🛑 Stopping existing frontend container..."
+          echo "🛑 Stopping and removing existing frontend container..."
           docker compose stop web || true
           docker compose rm -f web || true
+
+          # Remove container by name if it still exists (fallback)
+          docker rm -f nfc_web 2>/dev/null || true
 
           echo "🔐 Login to GHCR..."
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin

@@ -49,6 +49,7 @@ All notable changes to the NFC Medical Platform will be documented in this file.
 - Fixed ALLOWED_HOSTS configuration for multiple domains
 - Fixed Docker Compose build args for frontend environment variables
 - Fixed CORS configuration for cross-origin requests
+- Fixed GitHub Actions workflows to properly remove old containers before deployment
 
 #### Backend
 - Existing Django REST API with JWT authentication

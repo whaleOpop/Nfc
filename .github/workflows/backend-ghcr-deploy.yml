@@ -210,9 +210,12 @@ jobs:
           fi
           echo "✅ Docker Compose version: $(docker compose version)"
 
-          echo "🛑 Stopping existing backend containers..."
+          echo "🛑 Stopping and removing existing backend containers..."
           docker compose stop backend celery celery-beat || true
           docker compose rm -f backend celery celery-beat || true
+
+          # Remove containers by name if they still exist (fallback)
+          docker rm -f nfc_backend nfc_celery nfc_celery_beat 2>/dev/null || true
 
           echo "🔐 Login to GHCR..."
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -221,7 +224,7 @@ jobs:
           docker compose pull backend --quiet
 
           echo "🐳 Starting database and redis (if not running)..."
-          docker compose up -d db redis
+          docker compose up -d db redis --force-recreate || docker compose up -d db redis
 
           echo "⏳ Waiting for database to be ready..."
           max_wait=30

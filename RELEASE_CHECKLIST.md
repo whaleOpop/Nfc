@@ -14,8 +14,14 @@
 # 1. Добавить все файлы
 git add .
 
-# 2. Коммит
-git commit -m "🎉 Release v1.0.0 - Complete Frontend Implementation"
+# 2. Коммит (включает исправление workflows для удаления старых контейнеров)
+git commit -m "🎉 Release v1.0.0 - Complete Frontend Implementation
+
+- Add complete web frontend with all pages
+- Fix workflows to properly remove old containers before deploy
+- Add VERSION, CHANGELOG, and release documentation
+- Update API URL configuration
+"
 
 # 3. Пуш (запустит все workflows!)
 git push origin main
