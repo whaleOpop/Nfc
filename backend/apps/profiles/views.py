@@ -83,6 +83,26 @@ class MedicalProfileView(APIView):
 
         return Response(MedicalProfileSerializer(profile).data)
 
+    def patch(self, request):
+        """Update medical profile (partial update)"""
+        try:
+            profile = request.user.medical_profile
+        except MedicalProfile.DoesNotExist:
+            return Response(
+                {'error': 'Профиль не найден'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = MedicalProfileSerializer(
+            profile,
+            data=request.data,
+            partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        profile = serializer.save()
+
+        return Response(MedicalProfileSerializer(profile).data)
+
 
 # Allergy Views
 class AllergyListCreateView(generics.ListCreateAPIView):
