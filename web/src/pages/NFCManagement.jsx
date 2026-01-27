@@ -57,7 +57,8 @@ function NFCManagement() {
   const [createDialog, setCreateDialog] = useState(false)
   const [qrDialog, setQrDialog] = useState(false)
   const [selectedTag, setSelectedTag] = useState(null)
-  const [newTagName, setNewTagName] = useState('')
+  const [newTagUid, setNewTagUid] = useState('')
+  const [newTagType, setNewTagType] = useState('NTAG215')
 
   // Access Logs
   const [accessLogs, setAccessLogs] = useState([])
@@ -81,31 +82,41 @@ function NFCManagement() {
   }
 
   const handleCreateTag = async () => {
-    if (!newTagName.trim()) {
-      toast.error('Введите название метки')
+    if (!newTagUid.trim()) {
+      toast.error('Введите UID метки')
       return
     }
 
     try {
-      const response = await nfcAPI.createTag({ name: newTagName })
-      setTags([...tags, response.data])
+      const response = await nfcAPI.registerTag({
+        tag_uid: newTagUid.trim(),
+        tag_type: newTagType
+      })
+      // Response contains both tag and nfc_data
+      if (response.data.tag) {
+        setTags([...tags, response.data.tag])
+      }
       setCreateDialog(false)
-      setNewTagName('')
-      toast.success('NFC метка создана')
+      setNewTagUid('')
+      toast.success('NFC метка зарегистрирована')
     } catch (error) {
-      toast.error('Ошибка создания метки')
+      toast.error(error.response?.data?.error || 'Ошибка регистрации метки')
       console.error(error)
     }
   }
 
-  const handleToggleActive = async (tag) => {
+  const handleRevokeTag = async (tag) => {
+    if (!confirm('Вы уверены, что хотите отозвать эту метку? Это действие необратимо.')) {
+      return
+    }
+
     try {
-      const newStatus = !tag.is_active
-      await nfcAPI.updateTag(tag.id, { is_active: newStatus })
-      setTags(tags.map((t) => (t.id === tag.id ? { ...t, is_active: newStatus } : t)))
-      toast.success(newStatus ? 'Метка активирована' : 'Метка деактивирована')
+      await nfcAPI.revokeTag(tag.id, 'Отозвано пользователем')
+      // Reload data to get updated tag status
+      loadData()
+      toast.success('Метка отозвана')
     } catch (error) {
-      toast.error('Ошибка изменения статуса метки')
+      toast.error('Ошибка отзыва метки')
       console.error(error)
     }
   }
@@ -115,9 +126,10 @@ function NFCManagement() {
     setQrDialog(true)
   }
 
-  const getAccessUrl = (tagId) => {
-    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-    return `${baseUrl}/nfc/access/${tagId}/`
+  const getAccessUrl = (tagUid) => {
+    // Frontend URL for emergency access page
+    const baseUrl = window.location.origin
+    return `${baseUrl}/emergency/${tagUid}`
   }
 
   if (loading) {
@@ -186,30 +198,30 @@ function NFCManagement() {
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <NfcIcon color="primary" />
-                            <Typography variant="h6">{tag.name}</Typography>
+                            <Typography variant="h6">{tag.tag_uid}</Typography>
                           </Box>
                           <Chip
-                            label={tag.is_active ? 'Активна' : 'Неактивна'}
-                            color={tag.is_active ? 'success' : 'default'}
-                            icon={tag.is_active ? <CheckCircleIcon /> : <CancelIcon />}
+                            label={tag.status === 'ACTIVE' ? 'Активна' : tag.status === 'REVOKED' ? 'Отозвана' : tag.status}
+                            color={tag.status === 'ACTIVE' ? 'success' : 'default'}
+                            icon={tag.status === 'ACTIVE' ? <CheckCircleIcon /> : <CancelIcon />}
                           />
                         </Box>
 
                         <Typography variant="body2" color="text.secondary" gutterBottom>
-                          ID: {tag.uid}
+                          Тип: {tag.tag_type}
                         </Typography>
                         <Typography variant="body2" color="text.secondary" gutterBottom>
-                          Создана:{' '}
-                          {new Date(tag.created_at).toLocaleDateString('ru-RU', {
+                          Зарегистрирована:{' '}
+                          {new Date(tag.registered_at).toLocaleDateString('ru-RU', {
                             year: 'numeric',
                             month: 'long',
                             day: 'numeric',
                           })}
                         </Typography>
-                        {tag.last_accessed && (
+                        {tag.last_scanned_at && (
                           <Typography variant="body2" color="text.secondary">
-                            Последний доступ:{' '}
-                            {new Date(tag.last_accessed).toLocaleString('ru-RU')}
+                            Последнее сканирование:{' '}
+                            {new Date(tag.last_scanned_at).toLocaleString('ru-RU')}
                           </Typography>
                         )}
 
@@ -218,21 +230,20 @@ function NFCManagement() {
                             Статистика:
                           </Typography>
                           <Typography variant="body2">
-                            Всего обращений: {tag.access_count || 0}
+                            Всего сканирований: {tag.scan_count || 0}
                           </Typography>
                         </Box>
                       </CardContent>
                       <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <Typography variant="body2" sx={{ mr: 1 }}>
-                            Активна:
-                          </Typography>
-                          <Switch
-                            checked={tag.is_active}
-                            onChange={() => handleToggleActive(tag)}
-                            color="success"
-                          />
-                        </Box>
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          size="small"
+                          onClick={() => handleRevokeTag(tag)}
+                          disabled={tag.status !== 'ACTIVE'}
+                        >
+                          Отозвать
+                        </Button>
                         <Button
                           variant="outlined"
                           startIcon={<QrCodeIcon />}
@@ -282,20 +293,32 @@ function NFCManagement() {
                             minute: '2-digit',
                           })}
                         </TableCell>
-                        <TableCell>{log.nfc_tag_name || log.nfc_tag}</TableCell>
+                        <TableCell>{log.nfc_tag_uid || log.nfc_tag}</TableCell>
                         <TableCell>
                           <Chip
-                            label={log.access_type === 'NFC' ? 'NFC' : 'QR-код'}
+                            label={
+                              log.access_type === 'SCAN'
+                                ? 'Сканирование'
+                                : log.access_type === 'REGISTER'
+                                ? 'Регистрация'
+                                : 'Отзыв'
+                            }
                             size="small"
-                            color={log.access_type === 'NFC' ? 'primary' : 'secondary'}
+                            color={
+                              log.access_type === 'SCAN'
+                                ? 'primary'
+                                : log.access_type === 'REGISTER'
+                                ? 'success'
+                                : 'warning'
+                            }
                           />
                         </TableCell>
                         <TableCell>{log.ip_address || '—'}</TableCell>
                         <TableCell>
                           <Chip
-                            label={log.access_granted ? 'Успешно' : 'Отказано'}
+                            label={log.status === 'SUCCESS' ? 'Успешно' : 'Отказано'}
                             size="small"
-                            color={log.access_granted ? 'success' : 'error'}
+                            color={log.status === 'SUCCESS' ? 'success' : 'error'}
                           />
                         </TableCell>
                       </TableRow>
@@ -310,39 +333,46 @@ function NFCManagement() {
 
       {/* Create Tag Dialog */}
       <Dialog open={createDialog} onClose={() => setCreateDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Создать NFC метку</DialogTitle>
+        <DialogTitle>Зарегистрировать NFC метку</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mt: 1, mb: 2 }}>
-            После создания метки вам будет предоставлен уникальный QR-код и ID для программирования
-            NFC метки.
+            Введите UID метки, который можно получить сканированием физической NFC метки или из приложения для записи NFC.
           </Alert>
           <TextField
             autoFocus
             fullWidth
-            label="Название метки"
-            placeholder="Например: Основная метка, Запасная метка"
-            value={newTagName}
-            onChange={(e) => setNewTagName(e.target.value)}
-            helperText="Дайте метке понятное название для удобства"
+            label="UID метки"
+            placeholder="Например: 04:A3:B2:C1:D4:E5:F6"
+            value={newTagUid}
+            onChange={(e) => setNewTagUid(e.target.value)}
+            helperText="Уникальный идентификатор NFC метки"
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            fullWidth
+            label="Тип метки"
+            value={newTagType}
+            onChange={(e) => setNewTagType(e.target.value)}
+            helperText="По умолчанию: NTAG215"
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCreateDialog(false)}>Отмена</Button>
           <Button onClick={handleCreateTag} variant="contained">
-            Создать
+            Зарегистрировать
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* QR Code Dialog */}
       <Dialog open={qrDialog} onClose={() => setQrDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>QR-код для доступа</DialogTitle>
+        <DialogTitle>QR-код для экстренного доступа</DialogTitle>
         <DialogContent>
           {selectedTag && (
             <>
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
                 <Typography variant="h6" gutterBottom>
-                  {selectedTag.name}
+                  {selectedTag.tag_uid}
                 </Typography>
                 <Box
                   sx={{
@@ -353,18 +383,17 @@ function NFCManagement() {
                     mb: 2,
                   }}
                 >
-                  <QRCode value={getAccessUrl(selectedTag.uid)} size={256} level="H" />
+                  <QRCode value={getAccessUrl(selectedTag.tag_uid)} size={256} level="H" />
                 </Box>
                 <Alert severity="info" sx={{ width: '100%' }}>
-                  Отсканируйте этот QR-код для доступа к медицинским данным без физической NFC
-                  метки.
+                  Отсканируйте этот QR-код для доступа к медицинским данным в экстренных ситуациях. Доступ возможен без авторизации.
                 </Alert>
                 <Typography
                   variant="caption"
                   color="text.secondary"
                   sx={{ mt: 2, wordBreak: 'break-all', textAlign: 'center' }}
                 >
-                  {getAccessUrl(selectedTag.uid)}
+                  {getAccessUrl(selectedTag.tag_uid)}
                 </Typography>
               </Box>
             </>
@@ -378,7 +407,7 @@ function NFCManagement() {
               const canvas = document.querySelector('canvas')
               const url = canvas.toDataURL('image/png')
               const link = document.createElement('a')
-              link.download = `nfc-qr-${selectedTag.name}.png`
+              link.download = `nfc-qr-${selectedTag.tag_uid}.png`
               link.href = url
               link.click()
               toast.success('QR-код сохранен')

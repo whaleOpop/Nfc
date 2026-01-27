@@ -256,27 +256,36 @@ function EmergencyAccess() {
                           <ListItemText
                             primary={
                               <Typography variant="h6" fontWeight="bold">
-                                {allergy.name}
+                                {allergy.allergen}
                               </Typography>
                             }
                             secondary={
-                              <Chip
-                                label={
-                                  allergy.severity === 'HIGH'
-                                    ? 'ВЫСОКАЯ ОПАСНОСТЬ'
-                                    : allergy.severity === 'MEDIUM'
-                                    ? 'Средняя'
-                                    : 'Низкая'
-                                }
-                                color={
-                                  allergy.severity === 'HIGH'
-                                    ? 'error'
-                                    : allergy.severity === 'MEDIUM'
-                                    ? 'warning'
-                                    : 'default'
-                                }
-                                size="small"
-                              />
+                              <>
+                                <Chip
+                                  label={
+                                    allergy.severity === 'LIFE_THREATENING'
+                                      ? 'ОПАСНО ДЛЯ ЖИЗНИ'
+                                      : allergy.severity === 'SEVERE'
+                                      ? 'Тяжелая'
+                                      : allergy.severity === 'MODERATE'
+                                      ? 'Средняя'
+                                      : 'Легкая'
+                                  }
+                                  color={
+                                    allergy.severity === 'LIFE_THREATENING' || allergy.severity === 'SEVERE'
+                                      ? 'error'
+                                      : allergy.severity === 'MODERATE'
+                                      ? 'warning'
+                                      : 'default'
+                                  }
+                                  size="small"
+                                />
+                                {allergy.reaction && (
+                                  <Typography variant="body2" sx={{ mt: 1 }}>
+                                    Реакция: {allergy.reaction}
+                                  </Typography>
+                                )}
+                              </>
                             }
                           />
                         </ListItem>
@@ -309,11 +318,11 @@ function EmergencyAccess() {
                             <HospitalIcon color="error" />
                           </ListItemIcon>
                           <ListItemText
-                            primary={<Typography fontWeight="bold">{disease.name}</Typography>}
+                            primary={<Typography fontWeight="bold">{disease.disease_name}</Typography>}
                             secondary={
-                              disease.diagnosed_date
+                              disease.diagnosis_date
                                 ? `Диагностировано: ${new Date(
-                                    disease.diagnosed_date
+                                    disease.diagnosis_date
                                   ).toLocaleDateString('ru-RU')}`
                                 : null
                             }
@@ -351,7 +360,7 @@ function EmergencyAccess() {
                             <MedicationIcon />
                           </ListItemIcon>
                           <ListItemText
-                            primary={<Typography fontWeight="bold">{med.name}</Typography>}
+                            primary={<Typography fontWeight="bold">{med.medication_name}</Typography>}
                             secondary={
                               <>
                                 <Typography component="span" variant="body2">

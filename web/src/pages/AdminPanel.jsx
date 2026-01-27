@@ -45,7 +45,7 @@ import {
 } from '@mui/icons-material'
 import { toast } from 'react-toastify'
 import { useAuth } from '../contexts/AuthContext'
-import { nfcAPI, profileAPI } from '../services/api'
+import { nfcAPI, profileAPI, auditAPI } from '../services/api'
 
 function AdminPanel() {
   const navigate = useNavigate()
@@ -133,7 +133,7 @@ function AdminPanel() {
   const filteredLogs = accessLogs.filter(
     (log) =>
       !searchQuery ||
-      log.nfc_tag_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      log.nfc_tag_uid?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       log.ip_address?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
@@ -305,13 +305,25 @@ function AdminPanel() {
                             second: '2-digit',
                           })}
                         </TableCell>
-                        <TableCell>{log.nfc_tag_name || log.nfc_tag}</TableCell>
-                        <TableCell>{log.user_name || '—'}</TableCell>
+                        <TableCell>{log.nfc_tag_uid || log.nfc_tag}</TableCell>
+                        <TableCell>{log.accessed_by_name || '—'}</TableCell>
                         <TableCell>
                           <Chip
-                            label={log.access_type === 'NFC' ? 'NFC' : 'QR-код'}
+                            label={
+                              log.access_type === 'SCAN'
+                                ? 'Сканирование'
+                                : log.access_type === 'REGISTER'
+                                ? 'Регистрация'
+                                : 'Отзыв'
+                            }
                             size="small"
-                            color={log.access_type === 'NFC' ? 'primary' : 'secondary'}
+                            color={
+                              log.access_type === 'SCAN'
+                                ? 'primary'
+                                : log.access_type === 'REGISTER'
+                                ? 'success'
+                                : 'warning'
+                            }
                           />
                         </TableCell>
                         <TableCell>
@@ -321,9 +333,9 @@ function AdminPanel() {
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={log.access_granted ? 'Успешно' : 'Отказано'}
+                            label={log.status === 'SUCCESS' ? 'Успешно' : 'Отказано'}
                             size="small"
-                            color={log.access_granted ? 'success' : 'error'}
+                            color={log.status === 'SUCCESS' ? 'success' : 'error'}
                           />
                         </TableCell>
                       </TableRow>

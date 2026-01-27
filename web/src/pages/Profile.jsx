@@ -270,14 +270,14 @@ function Profile() {
                       label="Группа крови"
                       onChange={(e) => setProfile({ ...profile, blood_type: e.target.value })}
                     >
-                      <MenuItem value="O+">O (I) Rh+</MenuItem>
-                      <MenuItem value="O-">O (I) Rh-</MenuItem>
-                      <MenuItem value="A+">A (II) Rh+</MenuItem>
-                      <MenuItem value="A-">A (II) Rh-</MenuItem>
-                      <MenuItem value="B+">B (III) Rh+</MenuItem>
-                      <MenuItem value="B-">B (III) Rh-</MenuItem>
-                      <MenuItem value="AB+">AB (IV) Rh+</MenuItem>
-                      <MenuItem value="AB-">AB (IV) Rh-</MenuItem>
+                      <MenuItem value="I+">I (0) Rh+</MenuItem>
+                      <MenuItem value="I-">I (0) Rh-</MenuItem>
+                      <MenuItem value="II+">II (A) Rh+</MenuItem>
+                      <MenuItem value="II-">II (A) Rh-</MenuItem>
+                      <MenuItem value="III+">III (B) Rh+</MenuItem>
+                      <MenuItem value="III-">III (B) Rh-</MenuItem>
+                      <MenuItem value="IV+">IV (AB) Rh+</MenuItem>
+                      <MenuItem value="IV-">IV (AB) Rh-</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>

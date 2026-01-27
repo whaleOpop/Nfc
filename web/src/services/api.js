@@ -45,7 +45,7 @@ api.interceptors.response.use(
         }
 
         // Попытка обновить токен
-        const response = await axios.post(`${API_BASE_URL}/auth/token/refresh/`, {
+        const response = await axios.post(`${API_BASE_URL}/auth/refresh/`, {
           refresh: refreshToken,
         })
 
@@ -77,13 +77,13 @@ export const authAPI = {
   login: (email, password) => api.post('/auth/login/', { email, password }),
 
   // Выход
-  logout: (refreshToken) => api.post('/auth/logout/', { refresh_token: refreshToken }),
+  logout: (refreshToken) => api.post('/auth/logout/', { refresh: refreshToken }),
 
   // Получить текущего пользователя
   getCurrentUser: () => api.get('/auth/me/'),
 
   // Обновить токен
-  refreshToken: (refreshToken) => api.post('/auth/token/refresh/', { refresh: refreshToken }),
+  refreshToken: (refreshToken) => api.post('/auth/refresh/', { refresh: refreshToken }),
 
   // Изменить пароль
   changePassword: (data) => api.post('/auth/change-password/', data),
@@ -92,10 +92,13 @@ export const authAPI = {
 // Profile API
 export const profileAPI = {
   // Получить медицинский профиль
-  getProfile: () => api.get('/profiles/medical-profile/'),
+  getProfile: () => api.get('/profiles/'),
+
+  // Создать профиль
+  createProfile: (data) => api.post('/profiles/', data),
 
   // Обновить профиль
-  updateProfile: (data) => api.put('/profiles/medical-profile/', data),
+  updateProfile: (data) => api.put('/profiles/', data),
 
   // Получить аллергии
   getAllergies: () => api.get('/profiles/allergies/'),
@@ -103,23 +106,32 @@ export const profileAPI = {
   // Добавить аллергию
   addAllergy: (data) => api.post('/profiles/allergies/', data),
 
+  // Обновить аллергию
+  updateAllergy: (id, data) => api.put(`/profiles/allergies/${id}/`, data),
+
   // Удалить аллергию
   deleteAllergy: (id) => api.delete(`/profiles/allergies/${id}/`),
 
   // Получить хронические заболевания
-  getDiseases: () => api.get('/profiles/chronic-diseases/'),
+  getChronicDiseases: () => api.get('/profiles/chronic-diseases/'),
 
   // Добавить заболевание
-  addDisease: (data) => api.post('/profiles/chronic-diseases/', data),
+  addChronicDisease: (data) => api.post('/profiles/chronic-diseases/', data),
+
+  // Обновить заболевание
+  updateChronicDisease: (id, data) => api.put(`/profiles/chronic-diseases/${id}/`, data),
 
   // Удалить заболевание
-  deleteDisease: (id) => api.delete(`/profiles/chronic-diseases/${id}/`),
+  deleteChronicDisease: (id) => api.delete(`/profiles/chronic-diseases/${id}/`),
 
   // Получить лекарства
   getMedications: () => api.get('/profiles/medications/'),
 
   // Добавить лекарство
   addMedication: (data) => api.post('/profiles/medications/', data),
+
+  // Обновить лекарство
+  updateMedication: (id, data) => api.put(`/profiles/medications/${id}/`, data),
 
   // Удалить лекарство
   deleteMedication: (id) => api.delete(`/profiles/medications/${id}/`),
@@ -130,6 +142,9 @@ export const profileAPI = {
   // Добавить контакт
   addEmergencyContact: (data) => api.post('/profiles/emergency-contacts/', data),
 
+  // Обновить контакт
+  updateEmergencyContact: (id, data) => api.put(`/profiles/emergency-contacts/${id}/`, data),
+
   // Удалить контакт
   deleteEmergencyContact: (id) => api.delete(`/profiles/emergency-contacts/${id}/`),
 }
@@ -139,36 +154,42 @@ export const nfcAPI = {
   // Получить все NFC теги пользователя
   getTags: () => api.get('/nfc/tags/'),
 
-  // Получить конкретный тег
-  getTag: (id) => api.get(`/nfc/tags/${id}/`),
+  // Зарегистрировать новый тег
+  registerTag: (data) => api.post('/nfc/register/', data),
 
-  // Создать новый тег
-  createTag: (data) => api.post('/nfc/tags/', data),
-
-  // Обновить тег
-  updateTag: (id, data) => api.put(`/nfc/tags/${id}/`, data),
-
-  // Удалить тег
-  deleteTag: (id) => api.delete(`/nfc/tags/${id}/`),
-
-  // Активировать тег
-  activateTag: (id) => api.post(`/nfc/tags/${id}/activate/`),
-
-  // Деактивировать тег
-  deactivateTag: (id) => api.post(`/nfc/tags/${id}/deactivate/`),
-
-  // Получить публичную информацию по тегу (без авторизации)
-  getPublicInfo: (tagUid) => axios.get(`${API_BASE_URL}/nfc/public/${tagUid}/`),
-
-  // Запросить экстренный доступ
-  requestEmergencyAccess: (tagUid, data) =>
-    axios.post(`${API_BASE_URL}/nfc/emergency-access/request/`, {
-      tag_uid: tagUid,
-      ...data,
-    }),
+  // Отозвать тег
+  revokeTag: (tagId, reason = '') => api.post('/nfc/revoke/', { tag_id: tagId, reason }),
 
   // Получить логи доступа
   getAccessLogs: () => api.get('/nfc/access-logs/'),
+
+  // Получить экстренные доступы
+  getEmergencyAccesses: () => api.get('/nfc/emergency-accesses/'),
+
+  // Сканировать тег (экстренный доступ - без авторизации)
+  scanTag: (tagUid, publicKeyId, checksum, latitude, longitude) =>
+    axios.post(`${API_BASE_URL}/nfc/scan/`, {
+      tag_uid: tagUid,
+      public_key_id: publicKeyId,
+      checksum: checksum,
+      latitude: latitude,
+      longitude: longitude,
+    }),
+
+  // Получить данные экстренного доступа по ID тега (для QR кода)
+  getEmergencyData: (tagId) => axios.get(`${API_BASE_URL}/nfc/emergency/${tagId}/`),
+}
+
+// Audit API
+export const auditAPI = {
+  // Получить все логи аудита (только для админов)
+  getAuditLogs: (params) => api.get('/audit/logs/', { params }),
+
+  // Получить события безопасности (только для админов)
+  getSecurityEvents: (params) => api.get('/audit/security-events/', { params }),
+
+  // Получить логи текущего пользователя
+  getMyAuditLogs: () => api.get('/audit/my-logs/'),
 }
 
 export default api

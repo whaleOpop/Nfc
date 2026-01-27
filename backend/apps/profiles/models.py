@@ -10,14 +10,14 @@ class MedicalProfile(models.Model):
     """Medical profile for patients"""
 
     BLOOD_TYPE_CHOICES = (
-        ('O+', 'O(I) Rh+'),
-        ('O-', 'O(I) Rh-'),
-        ('A+', 'A(II) Rh+'),
-        ('A-', 'A(II) Rh-'),
-        ('B+', 'B(III) Rh+'),
-        ('B-', 'B(III) Rh-'),
-        ('AB+', 'AB(IV) Rh+'),
-        ('AB-', 'AB(IV) Rh-'),
+        ('I+', 'I(0) Rh+'),
+        ('I-', 'I(0) Rh-'),
+        ('II+', 'II(A) Rh+'),
+        ('II-', 'II(A) Rh-'),
+        ('III+', 'III(B) Rh+'),
+        ('III-', 'III(B) Rh-'),
+        ('IV+', 'IV(AB) Rh+'),
+        ('IV-', 'IV(AB) Rh-'),
     )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -30,7 +30,7 @@ class MedicalProfile(models.Model):
 
     # Basic medical info
     blood_type = models.CharField(
-        max_length=3,
+        max_length=4,
         choices=BLOOD_TYPE_CHOICES,
         blank=True,
         verbose_name='Группа крови'

@@ -9,6 +9,7 @@ from .views import (
     NFCTagRevokeView,
     NFCAccessLogListView,
     NFCEmergencyAccessListView,
+    NFCEmergencyDataView,
 )
 
 app_name = 'nfc'
@@ -19,6 +20,9 @@ urlpatterns = [
     path('register/', NFCTagRegisterView.as_view(), name='register'),
     path('scan/', NFCTagScanView.as_view(), name='scan'),
     path('revoke/', NFCTagRevokeView.as_view(), name='revoke'),
+
+    # Public emergency access (for QR code)
+    path('emergency/<str:tag_uid>/', NFCEmergencyDataView.as_view(), name='emergency-data'),
 
     # Logs
     path('access-logs/', NFCAccessLogListView.as_view(), name='access-log-list'),

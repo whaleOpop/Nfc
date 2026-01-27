@@ -297,3 +297,65 @@ class NFCEmergencyAccessListView(generics.ListAPIView):
         else:
             # Users can see emergency accesses for their tags
             return NFCEmergencyAccess.objects.filter(nfc_tag__user=user)
+
+
+class NFCEmergencyDataView(APIView):
+    """Get emergency medical data by NFC tag UID (for QR code access)"""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, tag_uid):
+        """Get emergency data by tag UID"""
+        nfc_tag = get_object_or_404(NFCTag, tag_uid=tag_uid)
+
+        if not nfc_tag.is_active:
+            self._log_access(nfc_tag, "SCAN", "DENIED", request, "Tag is not active")
+            return Response({"error": "NFC tag inactive"}, status=status.HTTP_403_FORBIDDEN)
+
+        nfc_tag.last_scanned_at = timezone.now()
+        nfc_tag.scan_count += 1
+        nfc_tag.save(update_fields=["last_scanned_at", "scan_count"])
+
+        try:
+            profile = nfc_tag.user.medical_profile
+            if not profile.is_public:
+                self._log_access(nfc_tag, "SCAN", "DENIED", request, "Profile is private")
+                return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+
+            user = nfc_tag.user
+            profile_data = EmergencyProfileSerializer(profile).data
+
+            self._log_access(nfc_tag, "SCAN", "SUCCESS", request)
+            NFCEmergencyAccess.objects.create(
+                nfc_tag=nfc_tag,
+                medical_worker=request.user if request.user.is_authenticated else None,
+                ip_address=self._get_client_ip(request),
+                device_info=request.META.get("HTTP_USER_AGENT", ""),
+                data_accessed=profile_data
+            )
+
+            return Response({
+                "user": {"full_name": user.get_full_name(), "first_name": user.first_name, "last_name": user.last_name},
+                "profile": profile_data,
+                "tag": {"name": "Tag " + nfc_tag.tag_uid[:8], "uid": str(nfc_tag.tag_uid)},
+                "allergies": profile_data.get("allergies", []),
+                "diseases": profile_data.get("chronic_diseases", []),
+                "medications": profile_data.get("medications", []),
+                "emergency_contacts": profile_data.get("emergency_contacts", []),
+            }, status=status.HTTP_200_OK)
+
+        except MedicalProfile.DoesNotExist:
+            self._log_access(nfc_tag, "SCAN", "FAILED", request, "Medical profile not found")
+            return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    def _log_access(self, nfc_tag, access_type, log_status, request, error_message=""):
+        NFCAccessLog.objects.create(
+            nfc_tag=nfc_tag, accessed_by=request.user if request.user.is_authenticated else None,
+            access_type=access_type, status=log_status, ip_address=self._get_client_ip(request),
+            user_agent=request.META.get("HTTP_USER_AGENT", ""), error_message=error_message
+        )
+
+    def _get_client_ip(self, request):
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        return x_forwarded_for.split(",")[0] if x_forwarded_for else request.META.get("REMOTE_ADDR", "127.0.0.1")
+
