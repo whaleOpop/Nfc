@@ -26,9 +26,10 @@ class NFCTagListView(generics.ListAPIView):
 
     serializer_class = NFCTagSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None  # Disable pagination for personal data
 
     def get_queryset(self):
-        return NFCTag.objects.filter(user=self.request.user)
+        return NFCTag.objects.filter(user=self.request.user).order_by('-registered_at')
 
 
 class NFCTagRegisterView(APIView):
@@ -270,16 +271,17 @@ class NFCAccessLogListView(generics.ListAPIView):
 
     serializer_class = NFCAccessLogSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None  # Disable pagination for personal data
 
     def get_queryset(self):
         user = self.request.user
 
         if user.is_admin:
             # Admins can see all logs
-            return NFCAccessLog.objects.all()
+            return NFCAccessLog.objects.all().order_by('-accessed_at')
         else:
             # Users can see logs for their tags
-            return NFCAccessLog.objects.filter(nfc_tag__user=user)
+            return NFCAccessLog.objects.filter(nfc_tag__user=user).order_by('-accessed_at')
 
 
 class NFCEmergencyAccessListView(generics.ListAPIView):
@@ -287,16 +289,17 @@ class NFCEmergencyAccessListView(generics.ListAPIView):
 
     serializer_class = NFCEmergencyAccessSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None  # Disable pagination for personal data
 
     def get_queryset(self):
         user = self.request.user
 
         if user.is_admin:
             # Admins can see all emergency accesses
-            return NFCEmergencyAccess.objects.all()
+            return NFCEmergencyAccess.objects.all().order_by('-accessed_at')
         else:
             # Users can see emergency accesses for their tags
-            return NFCEmergencyAccess.objects.filter(nfc_tag__user=user)
+            return NFCEmergencyAccess.objects.filter(nfc_tag__user=user).order_by('-accessed_at')
 
 
 class NFCEmergencyDataView(APIView):

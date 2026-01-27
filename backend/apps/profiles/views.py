@@ -110,9 +110,10 @@ class AllergyListCreateView(generics.ListCreateAPIView):
 
     serializer_class = AllergySerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None  # Disable pagination for personal data
 
     def get_queryset(self):
-        return Allergy.objects.filter(profile__user=self.request.user)
+        return Allergy.objects.filter(profile__user=self.request.user).order_by('-created_at')
 
     def perform_create(self, serializer):
         profile = self.request.user.medical_profile
@@ -135,9 +136,10 @@ class ChronicDiseaseListCreateView(generics.ListCreateAPIView):
 
     serializer_class = ChronicDiseaseSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None  # Disable pagination for personal data
 
     def get_queryset(self):
-        return ChronicDisease.objects.filter(profile__user=self.request.user)
+        return ChronicDisease.objects.filter(profile__user=self.request.user).order_by('-created_at')
 
     def perform_create(self, serializer):
         profile = self.request.user.medical_profile
@@ -160,9 +162,10 @@ class MedicationListCreateView(generics.ListCreateAPIView):
 
     serializer_class = MedicationSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None  # Disable pagination for personal data
 
     def get_queryset(self):
-        return Medication.objects.filter(profile__user=self.request.user)
+        return Medication.objects.filter(profile__user=self.request.user).order_by('-created_at')
 
     def perform_create(self, serializer):
         profile = self.request.user.medical_profile
@@ -185,9 +188,10 @@ class EmergencyContactListCreateView(generics.ListCreateAPIView):
 
     serializer_class = EmergencyContactSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None  # Disable pagination for personal data
 
     def get_queryset(self):
-        return EmergencyContact.objects.filter(profile__user=self.request.user)
+        return EmergencyContact.objects.filter(profile__user=self.request.user).order_by('priority', '-created_at')
 
     def perform_create(self, serializer):
         profile = self.request.user.medical_profile
@@ -210,17 +214,18 @@ class DoctorNoteListCreateView(generics.ListCreateAPIView):
 
     serializer_class = DoctorNoteSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None  # Disable pagination for personal data
 
     def get_queryset(self):
         user = self.request.user
 
         # Medical workers can see notes they created
         if user.is_medical_worker:
-            return DoctorNote.objects.filter(doctor=user)
+            return DoctorNote.objects.filter(doctor=user).order_by('-created_at')
 
         # Patients can see notes for their profile
         if user.is_patient and hasattr(user, 'medical_profile'):
-            return DoctorNote.objects.filter(profile=user.medical_profile)
+            return DoctorNote.objects.filter(profile=user.medical_profile).order_by('-created_at')
 
         return DoctorNote.objects.none()
 

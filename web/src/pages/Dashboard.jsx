@@ -50,9 +50,11 @@ function Dashboard() {
         profileAPI.getProfile().catch(() => null),
       ])
 
+      const tags = Array.isArray(tagsResponse?.data) ? tagsResponse.data : []
+
       setStats({
-        nfcTags: tagsResponse.data.length || 0,
-        activeAccess: tagsResponse.data.filter((t) => t.is_active).length || 0,
+        nfcTags: tags.length,
+        activeAccess: tags.filter((t) => t.is_active).length,
         profileComplete: !!profileResponse?.data,
       })
     } catch (error) {

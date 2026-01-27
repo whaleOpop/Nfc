@@ -113,17 +113,17 @@ function Profile() {
       }
 
       const [allergiesRes, diseasesRes, medicationsRes, contactsRes] = await Promise.all([
-        profileAPI.getAllergies(),
-        profileAPI.getChronicDiseases(),
-        profileAPI.getMedications(),
-        profileAPI.getEmergencyContacts(),
+        profileAPI.getAllergies().catch(() => ({ data: [] })),
+        profileAPI.getChronicDiseases().catch(() => ({ data: [] })),
+        profileAPI.getMedications().catch(() => ({ data: [] })),
+        profileAPI.getEmergencyContacts().catch(() => ({ data: [] })),
       ])
 
       setProfile(profileData)
-      setAllergies(allergiesRes.data)
-      setDiseases(diseasesRes.data)
-      setMedications(medicationsRes.data)
-      setEmergencyContacts(contactsRes.data)
+      setAllergies(Array.isArray(allergiesRes.data) ? allergiesRes.data : [])
+      setDiseases(Array.isArray(diseasesRes.data) ? diseasesRes.data : [])
+      setMedications(Array.isArray(medicationsRes.data) ? medicationsRes.data : [])
+      setEmergencyContacts(Array.isArray(contactsRes.data) ? contactsRes.data : [])
     } catch (error) {
       toast.error('Ошибка загрузки данных профиля')
       console.error(error)

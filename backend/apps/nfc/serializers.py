@@ -9,17 +9,18 @@ class NFCTagSerializer(serializers.ModelSerializer):
     """NFC Tag serializer"""
 
     user_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    is_active = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = NFCTag
         fields = (
             'id', 'user', 'user_name', 'tag_uid', 'tag_type',
-            'public_key_id', 'status', 'registered_at',
+            'public_key_id', 'status', 'is_active', 'registered_at',
             'last_scanned_at', 'scan_count', 'revoked_at',
             'revoked_reason', 'created_at', 'updated_at'
         )
         read_only_fields = (
-            'id', 'user', 'user_name', 'registered_at',
+            'id', 'user', 'user_name', 'is_active', 'registered_at',
             'last_scanned_at', 'scan_count', 'revoked_at',
             'created_at', 'updated_at'
         )
