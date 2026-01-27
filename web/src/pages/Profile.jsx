@@ -70,17 +70,17 @@ function Profile() {
   const [contactDialog, setContactDialog] = useState(false)
 
   // Form data for dialogs
-  const [newAllergy, setNewAllergy] = useState({ name: '', severity: 'MEDIUM' })
-  const [newDisease, setNewDisease] = useState({ name: '', diagnosed_date: '', notes: '' })
+  const [newAllergy, setNewAllergy] = useState({ allergen: '', severity: 'MODERATE', reaction: '' })
+  const [newDisease, setNewDisease] = useState({ disease_name: '', diagnosis_date: '', notes: '' })
   const [newMedication, setNewMedication] = useState({
-    name: '',
+    medication_name: '',
     dosage: '',
-    frequency: '',
+    frequency: 'ONCE_DAILY',
     start_date: '',
   })
   const [newContact, setNewContact] = useState({
     full_name: '',
-    relationship: '',
+    relationship: 'OTHER',
     phone: '',
   })
 
@@ -91,16 +91,35 @@ function Profile() {
   const loadProfileData = async () => {
     try {
       setLoading(true)
-      const [profileRes, allergiesRes, diseasesRes, medicationsRes, contactsRes] =
-        await Promise.all([
-          profileAPI.getProfile(),
-          profileAPI.getAllergies(),
-          profileAPI.getChronicDiseases(),
-          profileAPI.getMedications(),
-          profileAPI.getEmergencyContacts(),
-        ])
 
-      setProfile(profileRes.data)
+      // Try to load profile
+      let profileData = null
+      try {
+        const profileRes = await profileAPI.getProfile()
+        profileData = profileRes.data
+      } catch (error) {
+        // If profile doesn't exist (404), that's ok - we'll create it on first save
+        if (error.response?.status === 404) {
+          console.log('Profile not found, will be created on first save')
+          profileData = {
+            blood_type: '',
+            height: '',
+            weight: '',
+            emergency_notes: '',
+          }
+        } else {
+          throw error
+        }
+      }
+
+      const [allergiesRes, diseasesRes, medicationsRes, contactsRes] = await Promise.all([
+        profileAPI.getAllergies(),
+        profileAPI.getChronicDiseases(),
+        profileAPI.getMedications(),
+        profileAPI.getEmergencyContacts(),
+      ])
+
+      setProfile(profileData)
       setAllergies(allergiesRes.data)
       setDiseases(diseasesRes.data)
       setMedications(medicationsRes.data)
@@ -116,10 +135,21 @@ function Profile() {
   const handleSaveProfile = async () => {
     try {
       setSaving(true)
-      await profileAPI.updateProfile(profile)
-      toast.success('Профиль обновлен')
+
+      // If profile has id, update it; otherwise create it
+      let response
+      if (profile.id) {
+        response = await profileAPI.updateProfile(profile)
+        toast.success('Профиль обновлен')
+      } else {
+        response = await profileAPI.createProfile(profile)
+        toast.success('Профиль создан')
+      }
+
+      // Update profile with response data (including id for newly created profiles)
+      setProfile(response.data)
     } catch (error) {
-      toast.error('Ошибка сохранения профиля')
+      toast.error(error.response?.data?.error || 'Ошибка сохранения профиля')
       console.error(error)
     } finally {
       setSaving(false)
@@ -128,10 +158,16 @@ function Profile() {
 
   const handleAddAllergy = async () => {
     try {
+      // Ensure profile exists before adding allergy
+      if (!profile.id) {
+        const profileResponse = await profileAPI.createProfile(profile)
+        setProfile(profileResponse.data)
+      }
+
       const response = await profileAPI.addAllergy(newAllergy)
       setAllergies([...allergies, response.data])
       setAllergyDialog(false)
-      setNewAllergy({ name: '', severity: 'MEDIUM' })
+      setNewAllergy({ allergen: '', severity: 'MODERATE', reaction: '' })
       toast.success('Аллергия добавлена')
     } catch (error) {
       toast.error('Ошибка добавления аллергии')
@@ -152,10 +188,16 @@ function Profile() {
 
   const handleAddDisease = async () => {
     try {
+      // Ensure profile exists before adding disease
+      if (!profile.id) {
+        const profileResponse = await profileAPI.createProfile(profile)
+        setProfile(profileResponse.data)
+      }
+
       const response = await profileAPI.addChronicDisease(newDisease)
       setDiseases([...diseases, response.data])
       setDiseaseDialog(false)
-      setNewDisease({ name: '', diagnosed_date: '', notes: '' })
+      setNewDisease({ disease_name: '', diagnosis_date: '', notes: '' })
       toast.success('Заболевание добавлено')
     } catch (error) {
       toast.error('Ошибка добавления заболевания')
@@ -176,10 +218,16 @@ function Profile() {
 
   const handleAddMedication = async () => {
     try {
+      // Ensure profile exists before adding medication
+      if (!profile.id) {
+        const profileResponse = await profileAPI.createProfile(profile)
+        setProfile(profileResponse.data)
+      }
+
       const response = await profileAPI.addMedication(newMedication)
       setMedications([...medications, response.data])
       setMedicationDialog(false)
-      setNewMedication({ name: '', dosage: '', frequency: '', start_date: '' })
+      setNewMedication({ medication_name: '', dosage: '', frequency: 'ONCE_DAILY', start_date: '' })
       toast.success('Препарат добавлен')
     } catch (error) {
       toast.error('Ошибка добавления препарата')
@@ -200,10 +248,16 @@ function Profile() {
 
   const handleAddContact = async () => {
     try {
+      // Ensure profile exists before adding contact
+      if (!profile.id) {
+        const profileResponse = await profileAPI.createProfile(profile)
+        setProfile(profileResponse.data)
+      }
+
       const response = await profileAPI.addEmergencyContact(newContact)
       setEmergencyContacts([...emergencyContacts, response.data])
       setContactDialog(false)
-      setNewContact({ full_name: '', relationship: '', phone: '' })
+      setNewContact({ full_name: '', relationship: 'OTHER', phone: '' })
       toast.success('Контакт добавлен')
     } catch (error) {
       toast.error('Ошибка добавления контакта')
@@ -343,21 +397,23 @@ function Profile() {
                         {index > 0 && <Divider />}
                         <ListItem>
                           <ListItemText
-                            primary={allergy.name}
+                            primary={allergy.allergen}
                             secondary={
                               <Chip
                                 label={
-                                  allergy.severity === 'LOW'
-                                    ? 'Низкая'
-                                    : allergy.severity === 'MEDIUM'
+                                  allergy.severity === 'LIFE_THREATENING'
+                                    ? 'Опасная для жизни'
+                                    : allergy.severity === 'SEVERE'
+                                    ? 'Тяжелая'
+                                    : allergy.severity === 'MODERATE'
                                     ? 'Средняя'
-                                    : 'Высокая'
+                                    : 'Легкая'
                                 }
                                 size="small"
                                 color={
-                                  allergy.severity === 'HIGH'
+                                  allergy.severity === 'LIFE_THREATENING' || allergy.severity === 'SEVERE'
                                     ? 'error'
-                                    : allergy.severity === 'MEDIUM'
+                                    : allergy.severity === 'MODERATE'
                                     ? 'warning'
                                     : 'default'
                                 }
@@ -400,11 +456,11 @@ function Profile() {
                         {index > 0 && <Divider />}
                         <ListItem>
                           <ListItemText
-                            primary={disease.name}
+                            primary={disease.disease_name}
                             secondary={
-                              disease.diagnosed_date
+                              disease.diagnosis_date
                                 ? `Диагностировано: ${new Date(
-                                    disease.diagnosed_date
+                                    disease.diagnosis_date
                                   ).toLocaleDateString('ru-RU')}`
                                 : null
                             }
@@ -442,7 +498,7 @@ function Profile() {
                         {index > 0 && <Divider />}
                         <ListItem>
                           <ListItemText
-                            primary={med.name}
+                            primary={med.medication_name}
                             secondary={`${med.dosage} - ${med.frequency}`}
                           />
                           <ListItemSecondaryAction>
@@ -504,10 +560,19 @@ function Profile() {
           <TextField
             autoFocus
             fullWidth
-            label="Название"
-            value={newAllergy.name}
-            onChange={(e) => setNewAllergy({ ...newAllergy, name: e.target.value })}
+            label="Аллерген"
+            value={newAllergy.allergen}
+            onChange={(e) => setNewAllergy({ ...newAllergy, allergen: e.target.value })}
+            placeholder="Например: Пенициллин, Арахис"
             sx={{ mt: 2, mb: 2 }}
+          />
+          <TextField
+            fullWidth
+            label="Реакция"
+            value={newAllergy.reaction}
+            onChange={(e) => setNewAllergy({ ...newAllergy, reaction: e.target.value })}
+            placeholder="Описание реакции"
+            sx={{ mb: 2 }}
           />
           <FormControl fullWidth>
             <InputLabel>Степень тяжести</InputLabel>
@@ -516,14 +581,18 @@ function Profile() {
               label="Степень тяжести"
               onChange={(e) => setNewAllergy({ ...newAllergy, severity: e.target.value })}
             >
-              <MenuItem value="LOW">Низкая</MenuItem>
-              <MenuItem value="MEDIUM">Средняя</MenuItem>
-              <MenuItem value="HIGH">Высокая</MenuItem>
+              <MenuItem value="MILD">Легкая</MenuItem>
+              <MenuItem value="MODERATE">Средняя</MenuItem>
+              <MenuItem value="SEVERE">Тяжелая</MenuItem>
+              <MenuItem value="LIFE_THREATENING">Опасная для жизни</MenuItem>
             </Select>
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAllergyDialog(false)}>Отмена</Button>
+          <Button onClick={() => {
+            setAllergyDialog(false)
+            setNewAllergy({ allergen: '', severity: 'MODERATE', reaction: '' })
+          }}>Отмена</Button>
           <Button onClick={handleAddAllergy} variant="contained">
             Добавить
           </Button>
@@ -537,17 +606,18 @@ function Profile() {
           <TextField
             autoFocus
             fullWidth
-            label="Название"
-            value={newDisease.name}
-            onChange={(e) => setNewDisease({ ...newDisease, name: e.target.value })}
+            label="Название заболевания"
+            value={newDisease.disease_name}
+            onChange={(e) => setNewDisease({ ...newDisease, disease_name: e.target.value })}
+            placeholder="Например: Гипертония, Диабет 2 типа"
             sx={{ mt: 2, mb: 2 }}
           />
           <TextField
             fullWidth
             label="Дата диагностирования"
             type="date"
-            value={newDisease.diagnosed_date}
-            onChange={(e) => setNewDisease({ ...newDisease, diagnosed_date: e.target.value })}
+            value={newDisease.diagnosis_date}
+            onChange={(e) => setNewDisease({ ...newDisease, diagnosis_date: e.target.value })}
             InputLabelProps={{ shrink: true }}
             sx={{ mb: 2 }}
           />
@@ -561,7 +631,10 @@ function Profile() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDiseaseDialog(false)}>Отмена</Button>
+          <Button onClick={() => {
+            setDiseaseDialog(false)
+            setNewDisease({ disease_name: '', diagnosis_date: '', notes: '' })
+          }}>Отмена</Button>
           <Button onClick={handleAddDisease} variant="contained">
             Добавить
           </Button>
@@ -580,9 +653,10 @@ function Profile() {
           <TextField
             autoFocus
             fullWidth
-            label="Название"
-            value={newMedication.name}
-            onChange={(e) => setNewMedication({ ...newMedication, name: e.target.value })}
+            label="Название препарата"
+            value={newMedication.medication_name}
+            onChange={(e) => setNewMedication({ ...newMedication, medication_name: e.target.value })}
+            placeholder="Например: Амлодипин, Метформин"
             sx={{ mt: 2, mb: 2 }}
           />
           <TextField
@@ -590,16 +664,25 @@ function Profile() {
             label="Дозировка"
             value={newMedication.dosage}
             onChange={(e) => setNewMedication({ ...newMedication, dosage: e.target.value })}
+            placeholder="Например: 5 мг, 500 мг"
             sx={{ mb: 2 }}
           />
-          <TextField
-            fullWidth
-            label="Частота приема"
-            placeholder="Например: 2 раза в день"
-            value={newMedication.frequency}
-            onChange={(e) => setNewMedication({ ...newMedication, frequency: e.target.value })}
-            sx={{ mb: 2 }}
-          />
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel>Частота приема</InputLabel>
+            <Select
+              value={newMedication.frequency}
+              label="Частота приема"
+              onChange={(e) => setNewMedication({ ...newMedication, frequency: e.target.value })}
+            >
+              <MenuItem value="ONCE_DAILY">1 раз в день</MenuItem>
+              <MenuItem value="TWICE_DAILY">2 раза в день</MenuItem>
+              <MenuItem value="THREE_TIMES_DAILY">3 раза в день</MenuItem>
+              <MenuItem value="FOUR_TIMES_DAILY">4 раза в день</MenuItem>
+              <MenuItem value="AS_NEEDED">По необходимости</MenuItem>
+              <MenuItem value="WEEKLY">Еженедельно</MenuItem>
+              <MenuItem value="MONTHLY">Ежемесячно</MenuItem>
+            </Select>
+          </FormControl>
           <TextField
             fullWidth
             label="Дата начала приема"
@@ -610,7 +693,10 @@ function Profile() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setMedicationDialog(false)}>Отмена</Button>
+          <Button onClick={() => {
+            setMedicationDialog(false)
+            setNewMedication({ medication_name: '', dosage: '', frequency: 'ONCE_DAILY', start_date: '' })
+          }}>Отмена</Button>
           <Button onClick={handleAddMedication} variant="contained">
             Добавить
           </Button>
@@ -645,7 +731,10 @@ function Profile() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setContactDialog(false)}>Отмена</Button>
+          <Button onClick={() => {
+            setContactDialog(false)
+            setNewContact({ full_name: '', relationship: 'OTHER', phone: '' })
+          }}>Отмена</Button>
           <Button onClick={handleAddContact} variant="contained">
             Добавить
           </Button>
