@@ -84,6 +84,10 @@ jobs:
           channel: 'stable'
           architecture: x64
 
+      - name: Clean Flutter
+        working-directory: mobile
+        run: flutter clean
+
       - name: Get dependencies
         working-directory: mobile
         run: flutter pub get
@@ -149,23 +153,35 @@ jobs:
           channel: 'stable'
           architecture: x64
 
+      - name: Clean Flutter
+        working-directory: mobile
+        run: flutter clean
+
       - name: Get dependencies
         working-directory: mobile
         run: flutter pub get
 
-      - name: Update CocoaPods repo
-        run: pod repo update
+      - name: Install CocoaPods dependencies
         working-directory: mobile/ios
+        run: |
+          pod repo update
+          pod install
 
       - name: Build iOS app (no codesign)
         working-directory: mobile
-        run: flutter build ios --no-codesign
+        run: flutter build ipa --release --no-codesign
+
+      - name: Verify build output
+        working-directory: mobile
+        run: |
+          ls -la build/ios/ipa/ || echo "IPA directory not found"
+          ls -la build/ios/iphoneos/ || echo "iphoneos directory not found"
 
       - name: Prepare IPA
         working-directory: mobile/build/ios/iphoneos
         run: |
-          mkdir Payload
-          mv Runner.app Payload/
+          mkdir -p Payload
+          cp -r Runner.app Payload/
           zip -qq -r -9 FlutterIpaExport.ipa Payload
 
       - name: Upload IPA artifact
