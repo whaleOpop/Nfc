@@ -55,8 +55,15 @@ class NFCService {
       String errorMessage = e.toString();
 
       // Try to extract meaningful error from Dio exception
-      if (e.toString().contains('400')) {
+      final errorString = e.toString();
+      if (errorString.contains('Сначала создайте медицинский профиль') ||
+          errorString.contains('medical_profile') ||
+          errorString.contains('Medical profile')) {
+        errorMessage = 'Сначала создайте медицинский профиль в разделе "My Profile"';
+      } else if (errorString.contains('400')) {
         errorMessage = 'Bad request - check if tag format is correct';
+      } else if (errorString.contains('401') || errorString.contains('Unauthorized')) {
+        errorMessage = 'Session expired. Please login again';
       }
 
       return {'success': false, 'error': errorMessage};
