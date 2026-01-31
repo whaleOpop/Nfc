@@ -15,6 +15,17 @@ class _NFCTagsScreenState extends State<NFCTagsScreen> {
   List<NFCTag> _tags = [];
   bool _isLoading = true;
   bool _isNFCAvailable = false;
+  final List<String> _debugLogs = [];
+
+  void _addLog(String log) {
+    setState(() {
+      _debugLogs.add('${DateTime.now().toString().substring(11, 19)}: $log');
+      if (_debugLogs.length > 50) {
+        _debugLogs.removeAt(0);
+      }
+    });
+    print(log);
+  }
 
   @override
   void initState() {
@@ -25,8 +36,17 @@ class _NFCTagsScreenState extends State<NFCTagsScreen> {
 
   Future<void> _checkNFCAvailability() async {
     try {
+<<<<<<< HEAD
+      _addLog('Checking NFC availability...');
+      final availability = await NfcManager.instance.checkAvailability();
+      _addLog('NFC availability result: $availability');
+      _addLog('NFC availability index: ${availability.index}');
+      _addLog('NFC availability name: ${availability.name}');
+
+=======
       final availability = await NfcManager.instance.checkAvailability();
       print('NFC availability: $availability (index: ${availability.index})');
+>>>>>>> parent of 4b147bd (Add detailed NFC availability logging and user feedback)
       setState(() {
         // Only available (index = 2) means NFC is ready to use
         // notSupported = 0, disabled = 1, available = 2
@@ -44,8 +64,33 @@ class _NFCTagsScreenState extends State<NFCTagsScreen> {
           );
         }
       }
+<<<<<<< HEAD
+
+      _addLog('NFC status: $message');
+
+      if (availability.index != 2 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 5),
+            action: availability.index == 1
+                ? SnackBarAction(
+                    label: 'Open Settings',
+                    onPressed: () {
+                      // TODO: Open NFC settings
+                    },
+                  )
+                : null,
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      _addLog('NFC check error: $e');
+      _addLog('Stack trace: $stackTrace');
+=======
     } catch (e) {
       print('NFC check error: $e');
+>>>>>>> parent of 4b147bd (Add detailed NFC availability logging and user feedback)
       setState(() {
         _isNFCAvailable = false;
       });
@@ -53,12 +98,22 @@ class _NFCTagsScreenState extends State<NFCTagsScreen> {
   }
 
   Future<void> _loadTags() async {
+    _addLog('Loading NFC tags from API...');
     setState(() => _isLoading = true);
-    final tags = await _nfcService.getTags();
-    setState(() {
-      _tags = tags;
-      _isLoading = false;
-    });
+    try {
+      final tags = await _nfcService.getTags();
+      _addLog('Loaded ${tags.length} tags successfully');
+      setState(() {
+        _tags = tags;
+        _isLoading = false;
+      });
+    } catch (e) {
+      _addLog('Error loading tags: $e');
+      setState(() {
+        _tags = [];
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _scanAndRegisterTag() async {
@@ -156,21 +211,83 @@ class _NFCTagsScreenState extends State<NFCTagsScreen> {
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _tags.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  onRefresh: _loadTags,
+      body: Column(
+        children: [
+          // Debug logs panel
+          Container(
+            color: Colors.black87,
+            width: double.infinity,
+            constraints: const BoxConstraints(maxHeight: 200),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  color: Colors.grey[900],
+                  child: Row(
+                    children: [
+                      const Icon(Icons.bug_report, color: Colors.orange, size: 16),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'DEBUG LOGS',
+                        style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.clear, color: Colors.white, size: 16),
+                        onPressed: () {
+                          setState(() {
+                            _debugLogs.clear();
+                          });
+                        },
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
                   child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _tags.length,
+                    padding: const EdgeInsets.all(8),
+                    itemCount: _debugLogs.length,
                     itemBuilder: (context, index) {
-                      final tag = _tags[index];
-                      return _buildTagCard(tag);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          _debugLogs[index],
+                          style: const TextStyle(
+                            color: Colors.greenAccent,
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      );
                     },
                   ),
                 ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          // Main content
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _tags.isEmpty
+                    ? _buildEmptyState()
+                    : RefreshIndicator(
+                        onRefresh: _loadTags,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _tags.length,
+                          itemBuilder: (context, index) {
+                            final tag = _tags[index];
+                            return _buildTagCard(tag);
+                          },
+                        ),
+                      ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _scanAndRegisterTag,
         icon: const Icon(Icons.nfc),
