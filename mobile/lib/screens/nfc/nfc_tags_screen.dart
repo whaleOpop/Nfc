@@ -26,10 +26,26 @@ class _NFCTagsScreenState extends State<NFCTagsScreen> {
   Future<void> _checkNFCAvailability() async {
     try {
       final availability = await NfcManager.instance.checkAvailability();
+      print('NFC availability: $availability (index: ${availability.index})');
       setState(() {
-        _isNFCAvailable = availability.index > 0; // notSupported = 0, disabled = 1, available = 2
+        // Only available (index = 2) means NFC is ready to use
+        // notSupported = 0, disabled = 1, available = 2
+        _isNFCAvailable = availability.index == 2;
       });
+
+      if (availability.index == 1) {
+        // NFC is disabled
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('NFC is disabled. Please enable it in settings.'),
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+      }
     } catch (e) {
+      print('NFC check error: $e');
       setState(() {
         _isNFCAvailable = false;
       });
